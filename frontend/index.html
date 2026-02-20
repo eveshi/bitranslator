@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BiTranslator – 智能全书翻译</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <div class="logo">
+        <h1>BiTranslator</h1>
+        <p class="tagline">智能全书翻译</p>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>LLM 设置</h3>
+        <label>提供商
+          <select id="llm-provider">
+            <option value="openai">OpenAI / 兼容 API</option>
+            <option value="gemini">Google Gemini</option>
+            <option value="ollama">Ollama (本地)</option>
+          </select>
+        </label>
+        <label>API Base URL
+          <input type="text" id="llm-base-url" value="https://api.openai.com/v1" />
+        </label>
+        <label>API Key
+          <input type="password" id="llm-api-key" placeholder="sk-..." />
+        </label>
+        <label>分析模型
+          <input type="text" id="llm-model" value="gpt-4o" />
+        </label>
+        <label>翻译模型 (可选, 留空则使用分析模型)
+          <input type="text" id="llm-translation-model" placeholder="gpt-4o-mini" />
+        </label>
+        <label>Temperature
+          <input type="number" id="llm-temperature" value="0.3" min="0" max="2" step="0.1" />
+        </label>
+        <button id="btn-save-llm" class="btn btn-sm">保存设置</button>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>项目列表</h3>
+        <div id="project-list"></div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main id="main">
+      <!-- Step indicator -->
+      <div id="steps-bar" class="hidden">
+        <div class="step" data-step="upload"><span class="step-num">1</span> 上传</div>
+        <div class="step" data-step="analysis"><span class="step-num">2</span> 分析</div>
+        <div class="step" data-step="strategy"><span class="step-num">3</span> 策略</div>
+        <div class="step" data-step="sample"><span class="step-num">4</span> 样章</div>
+        <div class="step" data-step="translate"><span class="step-num">5</span> 全书翻译</div>
+        <div class="step" data-step="done"><span class="step-num">6</span> 完成</div>
+      </div>
+
+      <!-- Upload panel -->
+      <section id="panel-upload" class="panel active">
+        <div class="panel-center">
+          <div class="upload-area" id="drop-zone">
+            <div class="upload-icon">📖</div>
+            <h2>上传 EPUB 文件</h2>
+            <p>拖放文件到此处，或点击选择</p>
+            <input type="file" id="file-input" accept=".epub" hidden />
+            <div class="upload-options">
+              <label>源语言 <input type="text" id="source-lang" value="English" /></label>
+              <label>目标语言 <input type="text" id="target-lang" value="简体中文" /></label>
+            </div>
+            <button class="btn btn-primary" id="btn-upload">选择文件并上传</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Analysis panel -->
+      <section id="panel-analysis" class="panel">
+        <h2>📊 书籍深度分析</h2>
+        <p class="hint">AI 正在通读全书，理解上下文、角色、风格…</p>
+        <div id="analysis-loading" class="loading-spinner hidden">
+          <div class="spinner"></div>
+          <p>分析中，请稍候…</p>
+        </div>
+        <div id="analysis-content" class="hidden">
+          <div class="card-grid">
+            <div class="card">
+              <h3>类型</h3>
+              <p id="ana-genre"></p>
+            </div>
+            <div class="card">
+              <h3>主题</h3>
+              <ul id="ana-themes"></ul>
+            </div>
+            <div class="card">
+              <h3>写作风格</h3>
+              <p id="ana-style"></p>
+            </div>
+            <div class="card">
+              <h3>背景设定</h3>
+              <p id="ana-setting"></p>
+            </div>
+          </div>
+          <div class="card full-width">
+            <h3>主要角色</h3>
+            <div id="ana-characters"></div>
+          </div>
+          <div class="card full-width">
+            <h3>关键术语</h3>
+            <div id="ana-terms"></div>
+          </div>
+          <div class="card full-width">
+            <h3>文化背景笔记</h3>
+            <p id="ana-cultural"></p>
+          </div>
+          <button class="btn btn-primary" id="btn-gen-strategy">生成翻译策略 →</button>
+        </div>
+      </section>
+
+      <!-- Strategy panel -->
+      <section id="panel-strategy" class="panel">
+        <h2>📝 翻译策略</h2>
+        <p class="hint">审阅并自定义翻译策略，确保翻译符合您的期望</p>
+        <div id="strategy-loading" class="loading-spinner hidden">
+          <div class="spinner"></div>
+          <p>生成策略中…</p>
+        </div>
+        <div id="strategy-content" class="hidden">
+          <div class="strategy-field">
+            <label>整体翻译方针</label>
+            <textarea id="strat-approach" rows="3"></textarea>
+          </div>
+          <div class="strategy-field">
+            <label>语气与风格</label>
+            <textarea id="strat-tone" rows="3"></textarea>
+          </div>
+          <div class="strategy-field">
+            <label>文化适配</label>
+            <textarea id="strat-cultural" rows="3"></textarea>
+          </div>
+          <div class="strategy-field">
+            <label>特殊注意事项</label>
+            <textarea id="strat-special" rows="3"></textarea>
+          </div>
+          <div class="strategy-field full-width">
+            <label>角色名翻译</label>
+            <table id="strat-names-table">
+              <thead><tr><th>原文</th><th>译文</th><th>备注</th></tr></thead>
+              <tbody id="strat-names"></tbody>
+            </table>
+          </div>
+          <div class="strategy-field full-width">
+            <label>术语表</label>
+            <table id="strat-glossary-table">
+              <thead><tr><th>原文</th><th>译文</th><th>上下文</th></tr></thead>
+              <tbody id="strat-glossary"></tbody>
+            </table>
+          </div>
+          <div class="strategy-field full-width">
+            <label>自定义指令（您的额外要求）</label>
+            <textarea id="strat-custom" rows="4" placeholder="例如：翻译口吻要活泼一些；主角的名字翻译为…"></textarea>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="btn-save-strategy">保存修改</button>
+            <button class="btn btn-primary" id="btn-translate-sample">翻译样章 →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sample panel -->
+      <section id="panel-sample" class="panel">
+        <h2>📑 样章审阅</h2>
+        <p class="hint">审阅第一章的翻译效果，提供反馈后可重新调整策略</p>
+        <div id="sample-loading" class="loading-spinner hidden">
+          <div class="spinner"></div>
+          <p>翻译样章中…</p>
+        </div>
+        <div id="sample-content" class="hidden">
+          <div class="comparison">
+            <div class="comparison-col">
+              <h3>原文</h3>
+              <div id="sample-original" class="text-display"></div>
+            </div>
+            <div class="comparison-col">
+              <h3>译文</h3>
+              <div id="sample-translated" class="text-display"></div>
+            </div>
+          </div>
+          <div class="strategy-field full-width">
+            <label>反馈与调整建议</label>
+            <textarea id="sample-feedback" rows="4" placeholder="例如：语气可以更正式一些；人名翻译需要调整…"></textarea>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="btn-refine-strategy">根据反馈重新生成策略</button>
+            <button class="btn btn-primary" id="btn-translate-all">开始全书翻译 →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Full translation panel -->
+      <section id="panel-translate" class="panel">
+        <h2>🔄 全书翻译中</h2>
+        <div id="translate-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <p id="progress-text">准备中…</p>
+          <div id="chapter-status-list"></div>
+        </div>
+      </section>
+
+      <!-- Done panel -->
+      <section id="panel-done" class="panel">
+        <div class="panel-center">
+          <div class="done-icon">✅</div>
+          <h2>翻译完成！</h2>
+          <p>全书翻译已完成，点击下方按钮下载译文 EPUB。</p>
+          <button class="btn btn-primary btn-lg" id="btn-download">下载译文 EPUB</button>
+          <button class="btn" id="btn-new-project">翻译新书</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
