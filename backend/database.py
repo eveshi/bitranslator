@@ -30,11 +30,12 @@ CREATE TABLE IF NOT EXISTS chapters (
     project_id TEXT NOT NULL,
     chapter_index INTEGER NOT NULL,
     title TEXT NOT NULL DEFAULT '',
+    translated_title TEXT DEFAULT '',
+    chapter_type TEXT NOT NULL DEFAULT 'chapter',
     original_content TEXT NOT NULL DEFAULT '',
     translated_content TEXT,
     summary TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
-    -- the EPUB internal file name so we can rebuild faithfully
     epub_file_name TEXT,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
@@ -77,6 +78,8 @@ _MIGRATIONS = [
     "ALTER TABLE analyses ADD COLUMN translation_notes TEXT DEFAULT ''",
     "ALTER TABLE analyses ADD COLUMN research_report TEXT DEFAULT ''",
     "ALTER TABLE projects ADD COLUMN sample_chapter_index INTEGER DEFAULT 0",
+    "ALTER TABLE chapters ADD COLUMN translated_title TEXT DEFAULT ''",
+    "ALTER TABLE chapters ADD COLUMN chapter_type TEXT NOT NULL DEFAULT 'chapter'",
 ]
 
 

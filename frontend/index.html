@@ -4,20 +4,33 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BiTranslator – 智能全书翻译</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=6" />
 </head>
 <body>
   <div id="app">
     <!-- Sidebar -->
     <aside id="sidebar">
-      <div class="logo">
-        <h1>BiTranslator</h1>
-        <p class="tagline">智能全书翻译</p>
+      <div class="sidebar-top-row">
+        <div class="logo">
+          <h1>BiTranslator</h1>
+          <p class="tagline" data-i18n="tagline">智能全书翻译</p>
+        </div>
+        <button class="btn-icon sidebar-toggle" id="btn-toggle-sidebar" title="Toggle sidebar">◀</button>
+      </div>
+      <button class="btn btn-sm sidebar-home-btn" id="btn-home" data-i18n="home">🏠 主页</button>
+
+      <div class="sidebar-section sidebar-lang-section">
+        <label data-i18n="language">网站语言
+          <select id="app-lang-select">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+          </select>
+        </label>
       </div>
 
       <div class="sidebar-section">
-        <h3>LLM 设置</h3>
-        <label>提供商
+        <h3 data-i18n="llm_settings">LLM 设置</h3>
+        <label data-i18n="provider">提供商
           <select id="llm-provider">
             <option value="gemini" selected>Google Gemini</option>
             <option value="openai">OpenAI / 兼容 API</option>
@@ -27,34 +40,32 @@
         <label id="label-base-url" class="hidden">API Base URL
           <input type="text" id="llm-base-url" value="" />
         </label>
-        <label>API Key
+        <label data-i18n="api_key">API Key
           <input type="password" id="llm-api-key" placeholder="AIza..." />
         </label>
-        <label>分析模型
+        <label data-i18n="analysis_model">分析模型
           <select id="llm-model">
-            <optgroup label="Gemini 3 (Preview)">
-              <option value="gemini-2.5-pro" selected>Gemini 3 Pro Preview</option>
-              <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
-            </optgroup>
-            <optgroup label="Gemini 2.5 (Stable)">
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+            <optgroup label="Gemini 2.5">
+              <option value="gemini-2.5-pro" selected>Gemini 2.5 Pro</option>
               <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
               <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+            </optgroup>
+            <optgroup label="Gemini 2.0">
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
             </optgroup>
           </select>
           <input type="text" id="llm-model-custom" class="hidden" placeholder="自定义模型名称" />
         </label>
-        <label>翻译模型 (可选, 留空则使用分析模型)
+        <label data-i18n="translation_model">翻译模型 (可选, 留空则使用分析模型)
           <select id="llm-translation-model">
             <option value="">(与分析模型相同)</option>
-            <optgroup label="Gemini 3 (Preview)">
-              <option value="gemini-2.5-pro">Gemini 3 Pro Preview</option>
-              <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
-            </optgroup>
-            <optgroup label="Gemini 2.5 (Stable)">
+            <optgroup label="Gemini 2.5">
               <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
               <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
               <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+            </optgroup>
+            <optgroup label="Gemini 2.0">
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
             </optgroup>
           </select>
           <input type="text" id="llm-translation-model-custom" class="hidden" placeholder="自定义翻译模型名称" />
@@ -62,11 +73,11 @@
         <label>Temperature
           <input type="number" id="llm-temperature" value="0.3" min="0" max="2" step="0.1" />
         </label>
-        <button id="btn-save-llm" class="btn btn-sm">保存设置</button>
+        <button id="btn-save-llm" class="btn btn-sm" data-i18n="save_settings">保存设置</button>
       </div>
 
       <div class="sidebar-section">
-        <h3>项目列表</h3>
+        <h3 data-i18n="projects">项目列表</h3>
         <div id="project-list"></div>
       </div>
     </aside>
@@ -75,13 +86,14 @@
     <main id="main">
       <!-- Step indicator -->
       <div id="steps-bar" class="hidden">
-        <div class="step" data-step="upload"><span class="step-num">1</span> 上传</div>
-        <div class="step" data-step="analysis"><span class="step-num">2</span> 分析</div>
-        <div class="step" data-step="strategy"><span class="step-num">3</span> 策略</div>
-        <div class="step" data-step="sample"><span class="step-num">4</span> 样章</div>
-        <div class="step" data-step="translate"><span class="step-num">5</span> 全书翻译</div>
-        <div class="step" data-step="review"><span class="step-num">6</span> 审阅</div>
-        <div class="step" data-step="done"><span class="step-num">7</span> 下载</div>
+        <div class="step" data-step="upload"><span class="step-num">1</span> <span data-i18n="step_upload">上传</span></div>
+        <div class="step" data-step="analysis"><span class="step-num">2</span> <span data-i18n="step_analysis">分析</span></div>
+        <div class="step" data-step="strategy"><span class="step-num">3</span> <span data-i18n="step_strategy">策略</span></div>
+        <div class="step" data-step="sample"><span class="step-num">4</span> <span data-i18n="step_sample">样章</span></div>
+        <div class="step" data-step="translate"><span class="step-num">5</span> <span data-i18n="step_translate">翻译</span></div>
+        <div class="step" data-step="review"><span class="step-num">6</span> <span data-i18n="step_review">审阅</span></div>
+        <div class="step" data-step="reader"><span class="step-num">7</span> <span data-i18n="step_reader">阅读</span></div>
+        <div class="step" data-step="done"><span class="step-num">8</span> <span data-i18n="step_done">完成</span></div>
       </div>
 
       <!-- Upload panel -->
@@ -89,14 +101,13 @@
         <div class="panel-center">
           <div class="upload-area" id="drop-zone">
             <div class="upload-icon">📖</div>
-            <h2>上传 EPUB 文件</h2>
-            <p>拖放文件到此处，或点击选择</p>
+            <h2 data-i18n="upload_title">上传 EPUB 文件</h2>
+            <p>Drop file here or click to select</p>
             <input type="file" id="file-input" accept=".epub" hidden />
             <div class="upload-options">
-              <label>目标语言 <input type="text" id="target-lang" value="简体中文" /></label>
-              <p class="hint" style="margin-top:4px">源语言将自动检测</p>
+              <label data-i18n="target_language">目标语言 <input type="text" id="target-lang" value="简体中文" /></label>
             </div>
-            <button class="btn btn-primary" id="btn-upload">选择文件并上传</button>
+            <button class="btn btn-primary" id="btn-upload" data-i18n="upload_btn">选择文件并上传</button>
           </div>
         </div>
       </section>
@@ -302,64 +313,125 @@
 
       <!-- Review panel -->
       <section id="panel-review" class="panel">
-        <h2>📖 审阅译文</h2>
-        <p class="hint">点击任意章节阅读译文。如果对某章不满意，可以单独重新翻译该章节。</p>
+        <h2 data-i18n="review_title">📖 审阅译文</h2>
+        <p class="hint" data-i18n="review_hint">点击已翻译的章节进入阅读器阅读。如果对某章不满意，可以在阅读器中重新翻译。</p>
+        <div class="review-title-actions">
+          <button class="btn btn-sm" id="btn-review-edit-titles" data-i18n="edit_chapter_titles">✏️ 编辑章节标题</button>
+          <span class="hint" data-i18n="edit_titles_note">可设置前言/正文/附录类型，编辑双语标题</span>
+        </div>
 
         <div class="review-chapter-list" id="review-chapter-list"></div>
 
-        <div id="review-reader" class="review-reader hidden">
-          <div class="reader-header">
-            <button class="btn btn-sm" id="btn-reader-back">← 返回章节列表</button>
-            <h3 id="reader-chapter-title"></h3>
-            <button class="btn btn-danger btn-sm" id="btn-retranslate-chapter">🔄 重新翻译本章</button>
-          </div>
-          <div class="reader-content-wrapper">
-            <div class="reader-pane">
-              <h4>原文</h4>
-              <div id="reader-original" class="reader-text"></div>
-            </div>
-            <div class="reader-pane">
-              <h4>译文</h4>
-              <div id="reader-translated" class="reader-text"></div>
-            </div>
-          </div>
-        </div>
-
         <div class="review-translate-more card full-width" id="review-translate-more">
-          <h3>📖 继续翻译更多章节</h3>
+          <h3 data-i18n="translate_more">📖 继续翻译更多章节</h3>
           <div class="chapter-range-picker">
-            <label>从第 <input type="number" id="review-range-start" min="1" value="1" class="range-input" /> 章</label>
-            <label>到第 <input type="number" id="review-range-end" min="1" value="1" class="range-input" /> 章</label>
+            <label><span data-i18n="from_chapter">从第</span> <input type="number" id="review-range-start" min="1" value="1" class="range-input" /> <span data-i18n="chapter_unit">章</span></label>
+            <label><span data-i18n="to_chapter">到第</span> <input type="number" id="review-range-end" min="1" value="1" class="range-input" /> <span data-i18n="chapter_unit">章</span></label>
             <span class="range-hint" id="review-range-hint"></span>
           </div>
-          <button class="btn btn-primary" id="btn-translate-more">开始翻译 →</button>
+          <button class="btn btn-primary" id="btn-translate-more" data-i18n="start_translate">开始翻译 →</button>
         </div>
 
         <div class="review-footer">
-          <button class="btn btn-primary btn-lg" id="btn-review-done">确认完成，前往下载 →</button>
+          <button class="btn btn-primary btn-lg" id="btn-review-done" data-i18n="confirm_done">确认完成，前往下载 →</button>
         </div>
+      </section>
+
+      <!-- Reader panel -->
+      <section id="panel-reader" class="panel">
+        <div class="reader-toolbar">
+          <button class="btn btn-sm" id="btn-reader-exit" data-i18n="back_to_review">← 返回审阅</button>
+          <div class="reader-nav">
+            <button class="btn btn-sm" id="btn-reader-prev" disabled data-i18n="prev_chapter">◀ 上一章</button>
+            <span id="reader-nav-label" class="reader-nav-label"></span>
+            <button class="btn btn-sm" id="btn-reader-next" data-i18n="next_chapter">下一章 ▶</button>
+          </div>
+          <div class="reader-toolbar-actions">
+            <button class="btn btn-danger btn-sm" id="btn-reader-retranslate" data-i18n="retranslate_this">🔄 重新翻译本章</button>
+            <label class="reader-toggle">
+              <input type="checkbox" id="reader-show-original" checked />
+              <span data-i18n="show_original">显示原文</span>
+            </label>
+            <button class="btn btn-sm" id="btn-quick-translate-titles" data-i18n="ai_translate_titles_short">🤖 翻译标题</button>
+            <button class="btn btn-sm" id="btn-edit-titles" data-i18n="edit_chapter_titles">✏️ 编辑章节标题</button>
+          </div>
+        </div>
+
+        <div id="reader-book-view" class="reader-book-view">
+          <div class="reader-book-pane" id="reader-book-original">
+            <div class="reader-book-header">原文</div>
+            <div class="reader-book-content" id="reader-book-original-content"></div>
+          </div>
+          <div class="reader-book-pane" id="reader-book-translated">
+            <div class="reader-book-header">译文</div>
+            <div class="reader-book-content" id="reader-book-translated-content"></div>
+          </div>
+        </div>
+
+        <!-- AI Q&A -->
+        <div class="reader-qa" id="reader-qa">
+          <div class="reader-qa-header">
+            <h4 data-i18n="ai_assistant">🤖 AI 翻译助手</h4>
+            <p class="hint" data-i18n="ai_hint">选中文字后提问，或直接输入问题</p>
+          </div>
+          <div id="reader-qa-messages" class="reader-qa-messages"></div>
+          <div class="reader-qa-input">
+            <div id="reader-qa-selection" class="reader-qa-selection hidden">
+              <span class="reader-qa-selection-label" data-i18n="selected_text">选中文字：</span>
+              <span id="reader-qa-selection-text"></span>
+              <button class="btn-icon" id="btn-clear-selection">✕</button>
+            </div>
+            <div class="reader-qa-input-row">
+              <input type="text" id="reader-qa-question" data-i18n="ask_placeholder" placeholder="例如：这里为什么这样翻译？原文是什么意思？" />
+              <button class="btn btn-primary btn-sm" id="btn-reader-ask" data-i18n="ask_btn">提问</button>
+            </div>
+          </div>
+        </div>
+
       </section>
 
       <!-- Done panel -->
       <section id="panel-done" class="panel">
-        <h2 id="done-title">✅ 翻译完成！</h2>
-        <p id="done-hint">每章译文已单独保存为 EPUB。您可以逐章下载，也可以合并为完整译本。</p>
+        <h2 id="done-title" data-i18n="translate_done">✅ 翻译完成！</h2>
+        <p id="done-hint" data-i18n="done_hint_complete">每章译文已单独保存为 EPUB。您可以逐章下载，也可以合并为完整译本。</p>
 
         <div class="done-actions">
-          <button class="btn btn-primary btn-lg" id="btn-combine-download">合并为完整 EPUB 并下载</button>
-          <button class="btn" id="btn-back-to-review">← 返回审阅</button>
-          <button class="btn" id="btn-resume-translate" style="display:none">继续翻译剩余章节</button>
-          <button class="btn" id="btn-new-project">翻译新书</button>
+          <button class="btn btn-primary btn-lg" id="btn-combine-download" data-i18n="combine_download">合并为完整 EPUB 并下载</button>
+          <button class="btn" id="btn-back-to-review" data-i18n="back_to_review">← 返回审阅</button>
+          <button class="btn" id="btn-resume-translate" style="display:none" data-i18n="continue_translate">继续翻译剩余章节</button>
+          <button class="btn" id="btn-new-project" data-i18n="new_book">翻译新书</button>
         </div>
 
         <div class="card full-width">
-          <h3>逐章下载</h3>
+          <h3 data-i18n="download_chapters">逐章下载</h3>
           <div id="chapter-download-list"></div>
         </div>
       </section>
+
+      <!-- Title editor modal (shared by review & reader) -->
+      <div id="title-editor-overlay" class="modal-overlay hidden">
+        <div class="modal-content title-editor-modal">
+          <div class="modal-header">
+            <h3 data-i18n="edit_chapter_titles">✏️ 编辑章节标题</h3>
+            <button class="btn-icon" id="btn-close-title-editor">✕</button>
+          </div>
+          <p class="hint" data-i18n="edit_titles_hint">设置章节类型（前言/正文/附录）和双语标题。正文类章节将自动编号。</p>
+          <div class="te-toolbar">
+            <button class="btn btn-outline btn-sm" id="btn-ai-translate-titles" data-i18n="ai_translate_titles">🤖 AI 一键翻译所有标题</button>
+            <button class="btn btn-sm" id="btn-auto-number" data-i18n="auto_number">🔢 自动编号正文章节</button>
+            <button class="btn btn-sm" id="btn-strip-numbers" data-i18n="strip_numbers">🔢 去除译文编号</button>
+            <button class="btn btn-sm" id="btn-copy-numbers" data-i18n="copy_numbers">🔢 从原文复制编号到译文</button>
+          </div>
+          <div id="title-editor-list" class="title-editor-list"></div>
+          <div class="btn-row" style="margin-top:1rem">
+            <button class="btn btn-primary" id="btn-save-titles" data-i18n="save_all_titles">保存所有标题</button>
+            <button class="btn" id="btn-cancel-title-editor" data-i18n="cancel">取消</button>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

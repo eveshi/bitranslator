@@ -73,6 +73,8 @@ class ChapterOut(BaseModel):
     project_id: str
     chapter_index: int
     title: str
+    translated_title: str = ""
+    chapter_type: str = "chapter"  # "chapter", "frontmatter", "backmatter"
     status: str
     original_length: int = 0
     translated_length: int = 0
@@ -131,3 +133,23 @@ class FeedbackRequest(BaseModel):
 class TranslateRangeRequest(BaseModel):
     start_chapter: int = 0    # 0-based chapter index, inclusive
     end_chapter: int = -1     # 0-based chapter index, inclusive; -1 = last chapter
+
+
+class AskAboutTranslationRequest(BaseModel):
+    question: str
+    selected_original: str = ""
+    selected_translation: str = ""
+    chapter_id: str = ""
+
+
+class UpdateChapterTitleRequest(BaseModel):
+    title: str
+
+
+class ChapterTitleInfo(BaseModel):
+    title: str = ""
+    translated_title: str = ""
+    chapter_type: str = "chapter"
+
+class BatchUpdateTitlesRequest(BaseModel):
+    titles: dict[str, ChapterTitleInfo]  # chapter_id -> title info

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 
 from typing import Optional
@@ -13,9 +14,12 @@ from .. import database as db
 from ..models import (
     AnalysisOut, StrategyOut, StrategyUpdate, TranslationProgress,
     FeedbackRequest, LLMSettings, TranslateRangeRequest,
+    AskAboutTranslationRequest, UpdateChapterTitleRequest, BatchUpdateTitlesRequest,
 )
 from ..config import settings
 from ..services import analysis_service, strategy_service, translation_service, llm_service
+
+log = logging.getLogger(__name__)
 
 log = logging.getLogger(__name__)
 
@@ -312,3 +316,193 @@ async def download_epub(project_id: str):
         media_type="application/epub+zip",
         filename=path.name,
     )
+
+
+# ── AI Q&A about translation ───────────────────────────────────────────
+
+_QA_SYSTEM = """\
+You are a helpful translation consultant. The user is reading a book that was translated \
+from {source_lang} to {target_lang}. They have a question about the translation. \
+Answer concisely and helpfully. If they ask about why something was translated a certain way, \
+explain the reasoning based on the translation strategy and context. \
+If they provide selected text, refer to it specifically. \
+Respond in the user's target language ({target_lang})."""
+
+@router.post("/projects/{project_id}/ask")
+async def ask_about_translation(project_id: str, req: AskAboutTranslationRequest):
+    p = db.get_project(project_id)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    strategy = db.get_strategy(project_id)
+
+    context_parts = []
+    if req.chapter_id:
+        ch = db.get_chapter(req.chapter_id)
+        if ch:
+            context_parts.append(f"Chapter: {ch['title']}")
+    if req.selected_original:
+        context_parts.append(f"Selected original text: {req.selected_original}")
+    if req.selected_translation:
+        context_parts.append(f"Selected translation: {req.selected_translation}")
+    if strategy:
+        context_parts.append(f"Translation strategy: {strategy.get('overall_approach', '')}")
+        glossary = strategy.get("glossary", [])
+        if glossary:
+            terms = "; ".join(f"{g.get('source','')}→{g.get('target','')}" for g in glossary[:20])
+            context_parts.append(f"Key glossary: {terms}")
+
+    system = _QA_SYSTEM.format(
+        source_lang=p["source_language"],
+        target_lang=p["target_language"],
+    )
+    user_prompt = "\n".join(context_parts) + f"\n\nQuestion: {req.question}"
+
+    answer = await llm_service.chat(
+        system_prompt=system,
+        user_prompt=user_prompt,
+        max_tokens=1024,
+    )
+    return {"answer": answer}
+
+
+# ── Chapter title management ───────────────────────────────────────────
+
+_TITLE_TRANSLATE_SYSTEM = """\
+You are a professional translator. Translate chapter titles from {source_lang} to {target_lang}.
+
+IMPORTANT: Return ONLY a pure JSON array. No markdown, no explanation, no code fences.
+
+Each element must be an object with exactly two keys:
+  "index": the integer index from the input
+  "translated_title": the translated title string
+
+Translate naturally and idiomatically. Keep proper nouns recognisable.
+
+Example output format:
+[{{"index": 0, "translated_title": "..."}}, {{"index": 1, "translated_title": "..."}}]"""
+
+def _parse_title_result(result) -> dict[int, str]:
+    """Parse title translation result from either a list or dict."""
+    translated_map: dict[int, str] = {}
+    if isinstance(result, list):
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+            idx = item.get("index")
+            tt = item.get("translated_title", "")
+            if idx is not None and tt:
+                try:
+                    translated_map[int(idx)] = str(tt)
+                except (ValueError, TypeError):
+                    pass
+    elif isinstance(result, dict):
+        for key, val in result.items():
+            try:
+                k = int(key)
+            except (ValueError, TypeError):
+                continue
+            if isinstance(val, str):
+                translated_map[k] = val
+            elif isinstance(val, dict):
+                tt = val.get("translated_title", "")
+                if tt:
+                    translated_map[k] = str(tt)
+    return translated_map
+
+
+_TITLE_BATCH_SIZE = 5
+
+
+async def _translate_title_batch(
+    system: str, titles: list[tuple[int, str]],
+) -> dict[int, str]:
+    """Translate a single batch of titles. Returns {index: translated_title}."""
+    lines = [f"{idx}: {title}" for idx, title in titles]
+    user_prompt = "Translate these chapter titles:\n" + "\n".join(lines)
+
+    result = await llm_service.chat_json(
+        system_prompt=system,
+        user_prompt=user_prompt,
+        max_tokens=16384,
+    )
+    parsed = _parse_title_result(result)
+    if parsed:
+        return parsed
+
+    log.warning("Title batch parse failed, retrying with plain chat…")
+    raw_text = await llm_service.chat(
+        system_prompt=system,
+        user_prompt=user_prompt,
+        max_tokens=16384,
+    )
+    try:
+        result2 = json.loads(raw_text.strip().strip("`").strip())
+        return _parse_title_result(result2)
+    except (json.JSONDecodeError, ValueError):
+        return {}
+
+
+@router.post("/projects/{project_id}/chapters/translate-titles")
+async def translate_titles(project_id: str):
+    """Translate all chapter titles in batches of _TITLE_BATCH_SIZE."""
+    p = db.get_project(project_id)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    chapters = db.get_chapters(project_id)
+    if not chapters:
+        raise HTTPException(400, "No chapters found")
+
+    system = _TITLE_TRANSLATE_SYSTEM.format(
+        source_lang=p["source_language"],
+        target_lang=p["target_language"],
+    )
+
+    all_titles = [(ch["chapter_index"], ch["title"]) for ch in chapters]
+    batches = [all_titles[i:i + _TITLE_BATCH_SIZE]
+               for i in range(0, len(all_titles), _TITLE_BATCH_SIZE)]
+
+    log.info("Title translation: %d chapters in %d batches", len(chapters), len(batches))
+
+    translated_map: dict[int, str] = {}
+    for batch_num, batch in enumerate(batches, 1):
+        log.info("Translating title batch %d/%d (%d titles)", batch_num, len(batches), len(batch))
+        batch_result = await _translate_title_batch(system, batch)
+        translated_map.update(batch_result)
+
+    if not translated_map:
+        raise HTTPException(500, "AI returned no usable translations. Please try again.")
+
+    updated = 0
+    for ch in chapters:
+        tt = translated_map.get(ch["chapter_index"], "")
+        if tt:
+            db.update_chapter(ch["id"], translated_title=tt)
+            updated += 1
+
+    return {"ok": True, "updated": updated, "titles": translated_map}
+
+
+@router.patch("/projects/{project_id}/chapters/{chapter_id}/title")
+async def update_chapter_title(project_id: str, chapter_id: str, req: UpdateChapterTitleRequest):
+    ch = db.get_chapter(chapter_id)
+    if not ch or ch["project_id"] != project_id:
+        raise HTTPException(404, "Chapter not found")
+    db.update_chapter(chapter_id, title=req.title)
+    return {"ok": True}
+
+
+@router.put("/projects/{project_id}/chapters/titles")
+async def batch_update_titles(project_id: str, req: BatchUpdateTitlesRequest):
+    p = db.get_project(project_id)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    for chapter_id, info in req.titles.items():
+        ch = db.get_chapter(chapter_id)
+        if ch and ch["project_id"] == project_id:
+            db.update_chapter(
+                chapter_id,
+                title=info.title,
+                translated_title=info.translated_title,
+                chapter_type=info.chapter_type,
+            )
+    return {"ok": True, "updated": len(req.titles)}

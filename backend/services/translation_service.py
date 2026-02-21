@@ -59,6 +59,26 @@ And here is the portion of the original text that still needs to be translated:
 Continue the translation from where it stopped. Output ONLY the translated continuation."""
 
 
+def _extract_translated_title(translated_text: str, original_title: str) -> str:
+    """Extract the translated chapter title from the first line of translated text."""
+    lines = translated_text.strip().split("\n")
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if len(stripped) < 120 and not stripped.endswith(("。", ".", "！", "!", "？", "?", "」", '"', "…")):
+            return stripped
+        break
+    return ""
+
+
+def _bilingual_title(original_title: str, translated_title: str) -> str:
+    """Format a bilingual title for display: 'translated / original'."""
+    if not translated_title or translated_title.strip() == original_title.strip():
+        return original_title
+    return f"{translated_title} / {original_title}"
+
+
 def _build_strategy_text(strategy: dict) -> str:
     parts = []
     if strategy.get("overall_approach"):
@@ -244,12 +264,15 @@ async def translate_chapter(
         db.update_chapter(chapter_id, translated_content=partial)
 
     full_translation = "\n\n".join(translated_parts)
-    db.update_chapter(chapter_id, translated_content=full_translation, status="translated")
 
-    # Save per-chapter EPUB immediately
+    translated_title = _extract_translated_title(full_translation, chapter["title"])
+    db.update_chapter(chapter_id, translated_content=full_translation, status="translated",
+                      translated_title=translated_title)
+
+    display_title = _bilingual_title(chapter["title"], translated_title)
     epub_path = _chapter_epub_path(project, chapter)
     build_chapter_epub(
-        chapter_title=chapter["title"],
+        chapter_title=display_title,
         translated_text=full_translation,
         output_path=epub_path,
         book_title=project["name"],
@@ -322,7 +345,9 @@ async def translate_sample(project_id: str, chapter_index: int | None = None) ->
         project=project,
     )
 
-    db.update_chapter(chapter["id"], translated_content=translated, status="translated")
+    translated_title = _extract_translated_title(translated, chapter["title"])
+    db.update_chapter(chapter["id"], translated_content=translated, status="translated",
+                      translated_title=translated_title)
     db.update_project(project_id, status="sample_ready",
                       sample_chapter_index=idx)
     log.info("Sample translation done (chapter %d): %d chars translated", idx + 1, len(translated))
@@ -400,9 +425,15 @@ def combine_all_chapters(project_id: str) -> Path | None:
         return None
 
     translations = {}
+    bilingual_titles = {}
     for ch in chapters:
-        if ch.get("epub_file_name") and ch.get("translated_content"):
-            translations[ch["epub_file_name"]] = ch["translated_content"]
+        fname = ch.get("epub_file_name")
+        if not fname:
+            continue
+        tt = ch.get("translated_title") or ""
+        bilingual_titles[fname] = _bilingual_title(ch["title"], tt)
+        if ch.get("translated_content"):
+            translations[fname] = ch["translated_content"]
 
     if not translations:
         return None
@@ -410,7 +441,8 @@ def combine_all_chapters(project_id: str) -> Path | None:
     out_dir = _get_output_dir(project)
     safe_name = re.sub(r'[<>:"/\\|?*]', '_', project["name"])[:80].strip()
     out_path = out_dir / f"{safe_name}_complete.epub"
-    build_translated_epub(project["original_epub_path"], translations, out_path)
+    build_translated_epub(project["original_epub_path"], translations, out_path,
+                          bilingual_titles=bilingual_titles)
     db.update_project(project_id, translated_epub_path=str(out_path))
     log.info("Combined EPUB: %s", out_path)
     return out_path

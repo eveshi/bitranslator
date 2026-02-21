@@ -31,6 +31,7 @@ async def list_projects():
             status=p["status"],
             chapter_count=len(chapters),
             translated_count=translated,
+            sample_chapter_index=p.get("sample_chapter_index") or 0,
             created_at=p["created_at"],
             error_message=p.get("error_message"),
         ))
@@ -144,6 +145,8 @@ async def list_chapters(project_id: str):
             project_id=c["project_id"],
             chapter_index=c["chapter_index"],
             title=c["title"],
+            translated_title=c.get("translated_title") or "",
+            chapter_type=c.get("chapter_type") or "chapter",
             status=c["status"],
             original_length=len(c.get("original_content") or ""),
             translated_length=len(c.get("translated_content") or ""),

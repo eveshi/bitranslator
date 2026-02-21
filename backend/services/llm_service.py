@@ -92,12 +92,23 @@ async def _chat_gemini(
             max_output_tokens=max_tok,
         ),
     )
-    text = response.text or ""
+    text = ""
+    try:
+        text = response.text or ""
+    except ValueError:
+        log.warning("Gemini response had no text (possibly safety-blocked)")
     truncated = False
     if response.candidates:
-        reason = response.candidates[0].finish_reason
-        # Gemini uses "MAX_TOKENS" when output was cut off
-        truncated = str(reason).upper() in ("MAX_TOKENS", "FINISH_REASON_MAX_TOKENS", "2")
+        candidate = response.candidates[0]
+        reason = candidate.finish_reason
+        reason_str = str(reason).upper()
+        truncated = any(t in reason_str for t in ("MAX_TOKENS", "LENGTH"))
+        if not text and reason:
+            log.warning("Gemini empty response  finish_reason=%s", reason)
+    elif not text:
+        log.warning("Gemini returned no candidates (possibly blocked by safety filters)")
+        if hasattr(response, "prompt_feedback"):
+            log.warning("Gemini prompt_feedback: %s", response.prompt_feedback)
     log.info("Gemini response  len=%d  truncated=%s", len(text), truncated)
     return ChatResult(text=text, truncated=truncated)
 
@@ -266,40 +277,46 @@ async def chat_json(
     for_translation: bool = False,
     max_tokens: Optional[int] = None,
     required_keys: list[str] | None = None,
-) -> dict:
+) -> dict | list:
     """Call LLM and parse the response as JSON, with fallback extraction and retry."""
     raw = await chat(system_prompt, user_prompt, for_translation=for_translation,
                      max_tokens=max_tokens)
+
+    if not raw.strip():
+        log.warning("LLM returned empty response. Retrying…")
+        raw = await chat(system_prompt, user_prompt, for_translation=for_translation,
+                         max_tokens=max_tokens)
+
     result = _extract_json(raw)
 
-    # Check if extraction actually got meaningful data
-    if required_keys and not any(k in result for k in required_keys):
+    if required_keys and isinstance(result, dict) and not any(k in result for k in required_keys):
         log.warning("JSON extraction failed (no required keys found). Raw length=%d. Retrying…", len(raw))
         log.debug("Raw LLM output (first 500 chars): %s", raw[:500])
-        # Retry with explicit JSON instruction
         retry_prompt = (
             "Your previous response could not be parsed as JSON. "
-            "Please respond with ONLY a valid JSON object, no markdown formatting, "
+            "Please respond with ONLY valid JSON, no markdown formatting, "
             "no ```json``` code fences, no explanatory text. Just the raw JSON.\n\n"
             f"Original request:\n{user_prompt}"
         )
         raw2 = await chat(system_prompt, retry_prompt, for_translation=for_translation,
                           max_tokens=max_tokens)
         result2 = _extract_json(raw2)
-        if any(k in result2 for k in required_keys):
+        if isinstance(result2, dict) and any(k in result2 for k in required_keys):
             return result2
         log.error("JSON retry also failed. Returning partial result.")
-        # Store the raw text so the user can at least see something
-        result2["raw_analysis"] = raw
+        if isinstance(result2, dict):
+            result2["raw_analysis"] = raw
         return result2
 
     return result
 
 
-def _extract_json(text: str) -> dict:
-    """Best-effort JSON extraction from LLM output."""
+def _extract_json(text: str) -> dict | list:
+    """Best-effort JSON extraction from LLM output. Returns dict, list, or {"raw": text}."""
     text = text.strip()
-    # Direct parse
+    if not text:
+        return {"raw": ""}
+    # Direct parse (handles both objects and arrays)
     try:
         return json.loads(text)
     except json.JSONDecodeError:
@@ -309,6 +326,14 @@ def _extract_json(text: str) -> dict:
     if m:
         try:
             return json.loads(m.group(1).strip())
+        except json.JSONDecodeError:
+            pass
+    # Try to find a JSON array [ ... ]
+    arr_start = text.find("[")
+    arr_end = text.rfind("]")
+    if arr_start >= 0 and arr_end > arr_start:
+        try:
+            return json.loads(text[arr_start : arr_end + 1])
         except json.JSONDecodeError:
             pass
     # Find the outermost { ... } block

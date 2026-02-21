@@ -4,9 +4,11 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from .database import init_db
 from .routers import books, translation
@@ -19,11 +21,23 @@ logging.basicConfig(
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 
+class NoCacheStaticMiddleware(BaseHTTPMiddleware):
+    """Prevent browsers from caching frontend assets during development."""
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        if request.url.path.endswith((".html", ".js", ".css")):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
+
 def create_app() -> FastAPI:
     init_db()
 
     app = FastAPI(title="BiTranslator", version="0.1.0")
 
+    app.add_middleware(NoCacheStaticMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
