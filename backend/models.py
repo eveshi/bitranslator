@@ -22,10 +22,12 @@ class ProjectStatus(str, Enum):
     UPLOADED = "uploaded"
     ANALYZING = "analyzing"
     ANALYZED = "analyzed"
+    GENERATING_STRATEGY = "generating_strategy"
     STRATEGY_GENERATED = "strategy_generated"
     TRANSLATING_SAMPLE = "translating_sample"
     SAMPLE_READY = "sample_ready"
     TRANSLATING = "translating"
+    STOPPED = "stopped"
     COMPLETED = "completed"
     ERROR = "error"
 
@@ -61,6 +63,7 @@ class ProjectOut(BaseModel):
     status: str
     chapter_count: int = 0
     translated_count: int = 0
+    sample_chapter_index: int = 0
     created_at: str
     error_message: Optional[str] = None
 
@@ -84,6 +87,10 @@ class AnalysisOut(BaseModel):
     setting: str = ""
     key_terms: list[dict] = []
     cultural_notes: str = ""
+    author: str = ""
+    author_info: str = ""
+    translation_notes: str = ""
+    research_report: str = ""
     raw_analysis: str = ""
 
 
@@ -119,3 +126,8 @@ class TranslationProgress(BaseModel):
 
 class FeedbackRequest(BaseModel):
     feedback: str
+
+
+class TranslateRangeRequest(BaseModel):
+    start_chapter: int = 0    # 0-based chapter index, inclusive
+    end_chapter: int = -1     # 0-based chapter index, inclusive; -1 = last chapter

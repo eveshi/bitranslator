@@ -115,6 +115,43 @@ def build_translated_epub(
     return output_path
 
 
+def build_chapter_epub(
+    chapter_title: str,
+    translated_text: str,
+    output_path: str | Path,
+    book_title: str = "",
+) -> Path:
+    """Build a minimal EPUB containing a single translated chapter."""
+    book = epub.EpubBook()
+    book.set_identifier(f"bitranslator-ch-{uuid.uuid4().hex[:8]}")
+    book.set_title(f"{book_title} - {chapter_title}" if book_title else chapter_title)
+    book.set_language("zh")
+
+    paragraphs = []
+    for p in translated_text.split("\n\n"):
+        p = p.strip()
+        if p:
+            paragraphs.append(f"<p>{p}</p>")
+    html_body = "\n".join(paragraphs)
+
+    chapter = epub.EpubHtml(title=chapter_title, file_name="chapter.xhtml", lang="zh")
+    chapter.content = (
+        f"<html><head><title>{chapter_title}</title></head>"
+        f"<body><h1>{chapter_title}</h1>{html_body}</body></html>"
+    )
+    book.add_item(chapter)
+    book.spine = [chapter]
+    book.toc = [epub.Link("chapter.xhtml", chapter_title, "ch1")]
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    epub.write_epub(str(output_path), book)
+    log.info("Built chapter EPUB: %s", output_path)
+    return output_path
+
+
 def _replace_body_text(original_html: str, translated_text: str) -> str:
     """Replace the body content of an HTML document with translated text."""
     soup = BeautifulSoup(original_html, "lxml")

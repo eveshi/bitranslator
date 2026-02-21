@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS projects (
     translated_epub_path TEXT,
     status TEXT NOT NULL DEFAULT 'uploaded',
     error_message TEXT,
+    sample_chapter_index INTEGER DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -47,6 +48,10 @@ CREATE TABLE IF NOT EXISTS analyses (
     setting TEXT DEFAULT '',
     key_terms TEXT DEFAULT '[]',
     cultural_notes TEXT DEFAULT '',
+    author TEXT DEFAULT '',
+    author_info TEXT DEFAULT '',
+    translation_notes TEXT DEFAULT '',
+    research_report TEXT DEFAULT '',
     raw_analysis TEXT DEFAULT '',
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
@@ -66,10 +71,24 @@ CREATE TABLE IF NOT EXISTS strategies (
 """
 
 
+_MIGRATIONS = [
+    "ALTER TABLE analyses ADD COLUMN author TEXT DEFAULT ''",
+    "ALTER TABLE analyses ADD COLUMN author_info TEXT DEFAULT ''",
+    "ALTER TABLE analyses ADD COLUMN translation_notes TEXT DEFAULT ''",
+    "ALTER TABLE analyses ADD COLUMN research_report TEXT DEFAULT ''",
+    "ALTER TABLE projects ADD COLUMN sample_chapter_index INTEGER DEFAULT 0",
+]
+
+
 def init_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with _connect() as conn:
         conn.executescript(_SCHEMA)
+        for sql in _MIGRATIONS:
+            try:
+                conn.execute(sql)
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
 
 @contextmanager
@@ -175,7 +194,8 @@ def save_analysis(project_id: str, data: dict) -> None:
         conn.execute(
             "INSERT OR REPLACE INTO analyses "
             "(project_id, genre, themes, characters, writing_style, setting, "
-            "key_terms, cultural_notes, raw_analysis) VALUES (?,?,?,?,?,?,?,?,?)",
+            "key_terms, cultural_notes, author, author_info, translation_notes, "
+            "research_report, raw_analysis) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 project_id,
                 data.get("genre", ""),
@@ -185,6 +205,10 @@ def save_analysis(project_id: str, data: dict) -> None:
                 data.get("setting", ""),
                 json.dumps(data.get("key_terms", []), ensure_ascii=False),
                 data.get("cultural_notes", ""),
+                data.get("author", ""),
+                data.get("author_info", ""),
+                data.get("translation_notes", ""),
+                data.get("research_report", ""),
                 data.get("raw_analysis", ""),
             ),
         )

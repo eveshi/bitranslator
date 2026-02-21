@@ -105,9 +105,22 @@ async def get_project(project_id: str):
         status=p["status"],
         chapter_count=len(chapters),
         translated_count=translated,
+        sample_chapter_index=p.get("sample_chapter_index") or 0,
         created_at=p["created_at"],
         error_message=p.get("error_message"),
     )
+
+
+@router.patch("/{project_id}")
+async def update_project_settings(project_id: str, body: dict):
+    p = db.get_project(project_id)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    allowed = {"source_language", "target_language", "name"}
+    updates = {k: v for k, v in body.items() if k in allowed and isinstance(v, str)}
+    if updates:
+        db.update_project(project_id, **updates)
+    return {"ok": True}
 
 
 @router.delete("/{project_id}")

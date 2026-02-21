@@ -19,22 +19,45 @@
         <h3>LLM 设置</h3>
         <label>提供商
           <select id="llm-provider">
+            <option value="gemini" selected>Google Gemini</option>
             <option value="openai">OpenAI / 兼容 API</option>
-            <option value="gemini">Google Gemini</option>
             <option value="ollama">Ollama (本地)</option>
           </select>
         </label>
-        <label>API Base URL
-          <input type="text" id="llm-base-url" value="https://api.openai.com/v1" />
+        <label id="label-base-url" class="hidden">API Base URL
+          <input type="text" id="llm-base-url" value="" />
         </label>
         <label>API Key
-          <input type="password" id="llm-api-key" placeholder="sk-..." />
+          <input type="password" id="llm-api-key" placeholder="AIza..." />
         </label>
         <label>分析模型
-          <input type="text" id="llm-model" value="gpt-4o" />
+          <select id="llm-model">
+            <optgroup label="Gemini 3 (Preview)">
+              <option value="gemini-2.5-pro" selected>Gemini 3 Pro Preview</option>
+              <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+            </optgroup>
+            <optgroup label="Gemini 2.5 (Stable)">
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+            </optgroup>
+          </select>
+          <input type="text" id="llm-model-custom" class="hidden" placeholder="自定义模型名称" />
         </label>
         <label>翻译模型 (可选, 留空则使用分析模型)
-          <input type="text" id="llm-translation-model" placeholder="gpt-4o-mini" />
+          <select id="llm-translation-model">
+            <option value="">(与分析模型相同)</option>
+            <optgroup label="Gemini 3 (Preview)">
+              <option value="gemini-2.5-pro">Gemini 3 Pro Preview</option>
+              <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+            </optgroup>
+            <optgroup label="Gemini 2.5 (Stable)">
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+            </optgroup>
+          </select>
+          <input type="text" id="llm-translation-model-custom" class="hidden" placeholder="自定义翻译模型名称" />
         </label>
         <label>Temperature
           <input type="number" id="llm-temperature" value="0.3" min="0" max="2" step="0.1" />
@@ -57,7 +80,8 @@
         <div class="step" data-step="strategy"><span class="step-num">3</span> 策略</div>
         <div class="step" data-step="sample"><span class="step-num">4</span> 样章</div>
         <div class="step" data-step="translate"><span class="step-num">5</span> 全书翻译</div>
-        <div class="step" data-step="done"><span class="step-num">6</span> 完成</div>
+        <div class="step" data-step="review"><span class="step-num">6</span> 审阅</div>
+        <div class="step" data-step="done"><span class="step-num">7</span> 下载</div>
       </div>
 
       <!-- Upload panel -->
@@ -69,8 +93,8 @@
             <p>拖放文件到此处，或点击选择</p>
             <input type="file" id="file-input" accept=".epub" hidden />
             <div class="upload-options">
-              <label>源语言 <input type="text" id="source-lang" value="English" /></label>
               <label>目标语言 <input type="text" id="target-lang" value="简体中文" /></label>
+              <p class="hint" style="margin-top:4px">源语言将自动检测</p>
             </div>
             <button class="btn btn-primary" id="btn-upload">选择文件并上传</button>
           </div>
@@ -83,9 +107,26 @@
         <p class="hint">AI 正在通读全书，理解上下文、角色、风格…</p>
         <div id="analysis-loading" class="loading-spinner hidden">
           <div class="spinner"></div>
-          <p>分析中，请稍候…</p>
+          <p id="analysis-loading-text">正在进行在线调研与全书分析，请稍候…</p>
         </div>
         <div id="analysis-content" class="hidden">
+          <div class="lang-editor">
+            <label>源语言（自动检测） <input type="text" id="edit-source-lang" /></label>
+            <label>目标语言 <input type="text" id="edit-target-lang" /></label>
+            <button class="btn btn-sm" id="btn-save-langs">保存语言设置</button>
+            <span class="hint">如检测有误可手动修改</span>
+          </div>
+
+          <!-- Author & Research section -->
+          <div class="card full-width research-card">
+            <h3>🔍 作者与背景调研</h3>
+            <p class="research-author" id="ana-author"></p>
+            <details class="research-details">
+              <summary>查看完整调研报告</summary>
+              <div id="ana-research" class="research-report"></div>
+            </details>
+          </div>
+
           <div class="card-grid">
             <div class="card">
               <h3>类型</h3>
@@ -116,6 +157,27 @@
             <h3>文化背景笔记</h3>
             <p id="ana-cultural"></p>
           </div>
+          <div class="card full-width">
+            <h3>🌐 作者简介</h3>
+            <p id="ana-author-info"></p>
+          </div>
+          <div class="card full-width">
+            <h3>📋 翻译建议</h3>
+            <p id="ana-translation-notes"></p>
+          </div>
+          <div class="card full-width">
+            <h3>📚 章节概览</h3>
+            <p id="ana-chapter-count"></p>
+            <div id="ana-chapter-list" class="chapter-overview-list"></div>
+          </div>
+
+          <div class="feedback-section">
+            <h3>💬 分析有误？提交修正意见</h3>
+            <p class="hint">如果发现角色名称、术语、背景设定等分析有误，请在此描述需要修改的内容，AI 会根据您的反馈重新分析。</p>
+            <textarea id="analysis-feedback" rows="4" placeholder="例如：主角的名字应该是「张三」不是「张四」；这本书的时代背景是近未来不是当代；术语 XX 的解释不对…"></textarea>
+            <button class="btn" id="btn-refine-analysis">🔄 根据反馈重新分析</button>
+          </div>
+
           <button class="btn btn-primary" id="btn-gen-strategy">生成翻译策略 →</button>
         </div>
       </section>
@@ -163,7 +225,20 @@
             <label>自定义指令（您的额外要求）</label>
             <textarea id="strat-custom" rows="4" placeholder="例如：翻译口吻要活泼一些；主角的名字翻译为…"></textarea>
           </div>
+          <div class="feedback-section">
+            <h3>💬 策略不满意？提交反馈重新生成</h3>
+            <p class="hint">AI 会结合您的反馈和当前策略中的手动修改重新生成翻译策略。</p>
+            <textarea id="strategy-feedback" rows="3" placeholder="例如：翻译风格应该更口语化；角色名全部音译；某些术语需要统一…"></textarea>
+            <button class="btn" id="btn-regen-strategy">🔄 根据反馈重新生成策略</button>
+          </div>
+          <div class="sample-chapter-picker">
+            <label>选择样章：第
+              <select id="sample-chapter-select"></select>
+            章</label>
+            <span class="hint">（许多书第一章是介绍/序言，建议选择正文开始的章节）</span>
+          </div>
           <div class="btn-row">
+            <button class="btn btn-outline" id="btn-back-to-analysis">← 返回分析</button>
             <button class="btn" id="btn-save-strategy">保存修改</button>
             <button class="btn btn-primary" id="btn-translate-sample">翻译样章 →</button>
           </div>
@@ -173,10 +248,10 @@
       <!-- Sample panel -->
       <section id="panel-sample" class="panel">
         <h2>📑 样章审阅</h2>
-        <p class="hint">审阅第一章的翻译效果，提供反馈后可重新调整策略</p>
+        <p class="hint">审阅样章的翻译效果。如不满意，可提供反馈让 AI 调整策略并重新翻译样章。</p>
         <div id="sample-loading" class="loading-spinner hidden">
           <div class="spinner"></div>
-          <p>翻译样章中…</p>
+          <p id="sample-loading-text">翻译样章中…</p>
         </div>
         <div id="sample-content" class="hidden">
           <div class="comparison">
@@ -189,13 +264,25 @@
               <div id="sample-translated" class="text-display"></div>
             </div>
           </div>
-          <div class="strategy-field full-width">
-            <label>反馈与调整建议</label>
-            <textarea id="sample-feedback" rows="4" placeholder="例如：语气可以更正式一些；人名翻译需要调整…"></textarea>
-          </div>
-          <div class="btn-row">
-            <button class="btn" id="btn-refine-strategy">根据反馈重新生成策略</button>
-            <button class="btn btn-primary" id="btn-translate-all">开始全书翻译 →</button>
+
+          <div class="sample-actions">
+            <div class="sample-action-card">
+              <h3>🔄 不满意？提供反馈重新翻译</h3>
+              <p class="hint">AI 会根据您的反馈调整翻译策略，然后重新翻译样章。</p>
+              <textarea id="sample-feedback" rows="4" placeholder="例如：语气可以更正式一些；人名翻译需要调整；某些术语翻译不准确…"></textarea>
+              <button class="btn" id="btn-refine-and-retranslate">提交反馈并重新翻译样章</button>
+            </div>
+            <div class="sample-action-card highlight">
+              <h3>✅ 满意！选择翻译章节</h3>
+              <p class="hint">选择要翻译的章节范围，可以先翻译几章试读，之后随时继续。</p>
+              <div class="chapter-range-picker">
+                <label>从第 <input type="number" id="range-start" min="1" value="1" class="range-input" /> 章</label>
+                <label>到第 <input type="number" id="range-end" min="1" value="1" class="range-input" /> 章</label>
+                <span class="range-hint" id="range-hint"></span>
+              </div>
+              <div class="range-presets" id="range-presets"></div>
+              <button class="btn btn-primary btn-lg" id="btn-translate-all">开始翻译选中章节 →</button>
+            </div>
           </div>
         </div>
       </section>
@@ -208,18 +295,66 @@
             <div class="progress-fill" id="progress-fill"></div>
           </div>
           <p id="progress-text">准备中…</p>
+          <button class="btn btn-danger" id="btn-stop-translate">⏹ 停止翻译</button>
           <div id="chapter-status-list"></div>
+        </div>
+      </section>
+
+      <!-- Review panel -->
+      <section id="panel-review" class="panel">
+        <h2>📖 审阅译文</h2>
+        <p class="hint">点击任意章节阅读译文。如果对某章不满意，可以单独重新翻译该章节。</p>
+
+        <div class="review-chapter-list" id="review-chapter-list"></div>
+
+        <div id="review-reader" class="review-reader hidden">
+          <div class="reader-header">
+            <button class="btn btn-sm" id="btn-reader-back">← 返回章节列表</button>
+            <h3 id="reader-chapter-title"></h3>
+            <button class="btn btn-danger btn-sm" id="btn-retranslate-chapter">🔄 重新翻译本章</button>
+          </div>
+          <div class="reader-content-wrapper">
+            <div class="reader-pane">
+              <h4>原文</h4>
+              <div id="reader-original" class="reader-text"></div>
+            </div>
+            <div class="reader-pane">
+              <h4>译文</h4>
+              <div id="reader-translated" class="reader-text"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="review-translate-more card full-width" id="review-translate-more">
+          <h3>📖 继续翻译更多章节</h3>
+          <div class="chapter-range-picker">
+            <label>从第 <input type="number" id="review-range-start" min="1" value="1" class="range-input" /> 章</label>
+            <label>到第 <input type="number" id="review-range-end" min="1" value="1" class="range-input" /> 章</label>
+            <span class="range-hint" id="review-range-hint"></span>
+          </div>
+          <button class="btn btn-primary" id="btn-translate-more">开始翻译 →</button>
+        </div>
+
+        <div class="review-footer">
+          <button class="btn btn-primary btn-lg" id="btn-review-done">确认完成，前往下载 →</button>
         </div>
       </section>
 
       <!-- Done panel -->
       <section id="panel-done" class="panel">
-        <div class="panel-center">
-          <div class="done-icon">✅</div>
-          <h2>翻译完成！</h2>
-          <p>全书翻译已完成，点击下方按钮下载译文 EPUB。</p>
-          <button class="btn btn-primary btn-lg" id="btn-download">下载译文 EPUB</button>
+        <h2 id="done-title">✅ 翻译完成！</h2>
+        <p id="done-hint">每章译文已单独保存为 EPUB。您可以逐章下载，也可以合并为完整译本。</p>
+
+        <div class="done-actions">
+          <button class="btn btn-primary btn-lg" id="btn-combine-download">合并为完整 EPUB 并下载</button>
+          <button class="btn" id="btn-back-to-review">← 返回审阅</button>
+          <button class="btn" id="btn-resume-translate" style="display:none">继续翻译剩余章节</button>
           <button class="btn" id="btn-new-project">翻译新书</button>
+        </div>
+
+        <div class="card full-width">
+          <h3>逐章下载</h3>
+          <div id="chapter-download-list"></div>
         </div>
       </section>
     </main>
