@@ -126,12 +126,18 @@ async def update_project_settings(project_id: str, body: dict):
 
 @router.delete("/{project_id}")
 async def delete_project(project_id: str):
+    import logging
+    log = logging.getLogger(__name__)
+
     p = db.get_project(project_id)
     if not p:
         raise HTTPException(404, "Project not found")
     proj_dir = settings.data_dir / project_id
     if proj_dir.exists():
-        shutil.rmtree(proj_dir)
+        try:
+            shutil.rmtree(proj_dir, ignore_errors=True)
+        except Exception as e:
+            log.warning("Could not fully remove project dir %s: %s", proj_dir, e)
     db.delete_project(project_id)
     return {"ok": True}
 

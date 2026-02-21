@@ -152,6 +152,9 @@ def update_project(project_id: str, **kwargs) -> None:
 
 def delete_project(project_id: str) -> None:
     with _connect() as conn:
+        conn.execute("DELETE FROM chapters WHERE project_id=?", (project_id,))
+        conn.execute("DELETE FROM analyses WHERE project_id=?", (project_id,))
+        conn.execute("DELETE FROM strategies WHERE project_id=?", (project_id,))
         conn.execute("DELETE FROM projects WHERE id=?", (project_id,))
 
 

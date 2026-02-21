@@ -114,6 +114,9 @@ const I18N = {
     copy_numbers: "🔢 从原文复制编号到译文",
     no_numbers_found: "未检测到编号。",
     auto_number_done: "已为 {n} 个正文章节自动编号。",
+    delete_project: "删除项目",
+    confirm_delete_project: "确定要删除项目「{name}」吗？此操作不可撤销，所有数据将被永久删除。",
+    delete_failed: "删除失败",
   },
   en: {
     app_title: "BiTranslator – Intelligent Book Translation",
@@ -225,6 +228,9 @@ const I18N = {
     copy_numbers: "🔢 Copy Numbering from Original",
     no_numbers_found: "No numbering detected.",
     auto_number_done: "Auto-numbered {n} body chapters.",
+    delete_project: "Delete project",
+    confirm_delete_project: "Delete project \"{name}\"? This cannot be undone — all data will be permanently removed.",
+    delete_failed: "Delete failed",
   },
 };
 
@@ -376,8 +382,23 @@ async function loadProjects() {
       const div = document.createElement("div");
       div.className = "project-item" + (p.id === currentProjectId ? " active" : "");
       const chLabel = currentLang === "en" ? "ch" : "章";
-      div.innerHTML = `<div>${p.name}</div><div class="project-status">${statusLabel(p.status)} · ${p.translated_count}/${p.chapter_count} ${chLabel}</div>`;
-      div.addEventListener("click", () => openProject(p.id));
+      div.innerHTML = `<div class="project-info"><div>${esc(p.name)}</div><div class="project-status">${statusLabel(p.status)} · ${p.translated_count}/${p.chapter_count} ${chLabel}</div></div><button class="btn-delete-project" title="${t("delete_project")}">&times;</button>`;
+      div.querySelector(".project-info").addEventListener("click", () => openProject(p.id));
+      div.querySelector(".btn-delete-project").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm(t("confirm_delete_project").replace("{name}", p.name))) return;
+        try {
+          await apiJson(`/api/projects/${p.id}`, { method: "DELETE" });
+          if (currentProjectId === p.id) {
+            currentProjectId = null;
+            showPanel("upload");
+            hide($("#steps-bar"));
+          }
+          await loadProjects();
+        } catch (err) {
+          alert(t("delete_failed") + ": " + err.message);
+        }
+      });
       list.appendChild(div);
     }
   } catch (e) {

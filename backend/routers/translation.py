@@ -321,12 +321,37 @@ async def download_epub(project_id: str):
 # ── AI Q&A about translation ───────────────────────────────────────────
 
 _QA_SYSTEM = """\
-You are a helpful translation consultant. The user is reading a book that was translated \
-from {source_lang} to {target_lang}. They have a question about the translation. \
-Answer concisely and helpfully. If they ask about why something was translated a certain way, \
-explain the reasoning based on the translation strategy and context. \
-If they provide selected text, refer to it specifically. \
-Respond in the user's target language ({target_lang})."""
+You are a helpful translation consultant. The user is reading "{book_title}" by {author}, \
+translated from {source_lang} to {target_lang}.
+You have access to the full translation strategy, book analysis, and research that were used \
+to guide this translation. When the user questions a translation choice, explain the reasoning \
+based on the strategy, glossary, cultural context, and research findings.
+If web search results are available, use them to supplement your answer.
+Answer concisely. Respond in {target_lang}."""
+
+_QA_CONTEXT_WORDS = 300
+
+
+def _extract_nearby_context(full_text: str, selected: str, window: int = _QA_CONTEXT_WORDS) -> str:
+    """Extract a small window of text around the selected portion."""
+    if not full_text or not selected:
+        return ""
+    pos = full_text.find(selected[:60])
+    if pos < 0:
+        pos = full_text.find(selected[:30])
+    if pos < 0:
+        return ""
+    words = full_text.split()
+    char_count = 0
+    start_word = 0
+    for i, w in enumerate(words):
+        char_count += len(w) + 1
+        if char_count >= pos:
+            start_word = max(0, i - window // 4)
+            break
+    end_word = min(len(words), start_word + window)
+    return " ".join(words[start_word:end_word])
+
 
 @router.post("/projects/{project_id}/ask")
 async def ask_about_translation(project_id: str, req: AskAboutTranslationRequest):
@@ -334,33 +359,75 @@ async def ask_about_translation(project_id: str, req: AskAboutTranslationRequest
     if not p:
         raise HTTPException(404, "Project not found")
     strategy = db.get_strategy(project_id)
+    analysis = db.get_analysis(project_id)
+
+    book_author = (analysis or {}).get("author", "") or "Unknown"
 
     context_parts = []
     if req.chapter_id:
         ch = db.get_chapter(req.chapter_id)
         if ch:
-            context_parts.append(f"Chapter: {ch['title']}")
+            context_parts.append(f"Chapter: {ch.get('title', '')}")
+
+            if req.selected_original and ch.get("original_content"):
+                nearby = _extract_nearby_context(ch["original_content"], req.selected_original)
+                if nearby:
+                    context_parts.append(f"Nearby original context: …{nearby}…")
+            if req.selected_translation and ch.get("translated_content"):
+                nearby = _extract_nearby_context(ch["translated_content"], req.selected_translation)
+                if nearby:
+                    context_parts.append(f"Nearby translated context: …{nearby}…")
+
     if req.selected_original:
-        context_parts.append(f"Selected original text: {req.selected_original}")
+        context_parts.append(f"Selected original: {req.selected_original[:500]}")
     if req.selected_translation:
-        context_parts.append(f"Selected translation: {req.selected_translation}")
+        context_parts.append(f"Selected translation: {req.selected_translation[:500]}")
+
+    # Include analysis background (trimmed)
+    if analysis:
+        ana_parts = []
+        for key in ("genre", "writing_style", "themes", "cultural_notes", "translation_notes"):
+            val = analysis.get(key, "")
+            if val:
+                ana_parts.append(f"{key}: {val[:200]}")
+        characters = analysis.get("characters", "")
+        if characters:
+            ana_parts.append(f"characters: {characters[:300]}")
+        research = analysis.get("research_report", "")
+        if research:
+            ana_parts.append(f"research summary: {research[:500]}")
+        if ana_parts:
+            context_parts.append("=== Book Analysis ===\n" + "\n".join(ana_parts))
+
+    # Include full translation strategy
     if strategy:
-        context_parts.append(f"Translation strategy: {strategy.get('overall_approach', '')}")
+        strat_parts = []
+        for key in ("overall_approach", "tone_voice", "cultural_adaptation", "names_places"):
+            val = strategy.get(key, "")
+            if val:
+                strat_parts.append(f"{key}: {val}")
         glossary = strategy.get("glossary", [])
         if glossary:
-            terms = "; ".join(f"{g.get('source','')}→{g.get('target','')}" for g in glossary[:20])
-            context_parts.append(f"Key glossary: {terms}")
+            terms = "; ".join(f"{g.get('source','')}→{g.get('target','')}" for g in glossary[:30])
+            strat_parts.append(f"glossary: {terms}")
+        constraints = strategy.get("constraints", "")
+        if constraints:
+            strat_parts.append(f"constraints: {constraints}")
+        if strat_parts:
+            context_parts.append("=== Translation Strategy ===\n" + "\n".join(strat_parts))
 
     system = _QA_SYSTEM.format(
+        book_title=p.get("name", "Unknown"),
+        author=book_author,
         source_lang=p["source_language"],
         target_lang=p["target_language"],
     )
     user_prompt = "\n".join(context_parts) + f"\n\nQuestion: {req.question}"
 
-    answer = await llm_service.chat(
+    answer = await llm_service.chat_with_search(
         system_prompt=system,
         user_prompt=user_prompt,
-        max_tokens=1024,
+        max_tokens=8192,
     )
     return {"answer": answer}
 
