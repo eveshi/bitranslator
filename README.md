@@ -31,6 +31,36 @@ Upload EPUB → Deep Analysis (with online research) → Generate Strategy → E
 → Translate Sample → Review/Feedback → Full Translation → Reader & Review → Download EPUB
 ```
 
+### Screenshots
+
+**Deep Analysis** – AI identifies genre, themes, characters, writing style, and cultural context with bilingual output:
+
+![Analysis Page](images/analysis_page.png)
+
+![Analysis – Characters](images/analysis_page_2.png)
+
+![Analysis – Key Terms & Cultural Notes](images/analysis_page_3.png)
+
+**Sample Review** – Preview translation quality with side-by-side original/translation; select chapter range for full translation:
+
+![Sample Page](images/sample_page.png)
+
+**Review** – Browse all chapters, manage chapter types and bilingual titles:
+
+![Review Page](images/review_page.png)
+
+**Title Editor** – Set chapter types (front matter/body/back matter), edit bilingual titles, auto-number, AI translate:
+
+![Title Editor](images/title_editor.png)
+
+**Built-in Reader** – Side-by-side reading with AI Q&A assistant for translation questions:
+
+![Reader](images/reader.png)
+
+**Download** – Chapter-by-chapter downloads or combine into a complete translated EPUB:
+
+![Finish Page](images/finish_page.png)
+
 ### Quick Start
 
 #### 1. Prerequisites
@@ -138,6 +168,36 @@ BiTranslator 是一款 AI 驱动的整书翻译工具。不同于简单的逐章
 上传 EPUB → 深度分析（含在线调研）→ 生成翻译策略 → 编辑策略
 → 翻译样章 → 审阅/反馈 → 全书翻译 → 阅读器审阅 → 下载 EPUB
 ```
+
+### 界面截图
+
+**深度分析** – AI 识别体裁、主题、角色、写作风格和文化背景，中英双语输出：
+
+![分析页面](images/analysis_page.png)
+
+![分析 – 主要角色](images/analysis_page_2.png)
+
+![分析 – 关键术语与文化笔记](images/analysis_page_3.png)
+
+**样章审阅** – 原文/译文对照预览翻译质量；选择章节范围进行全书翻译：
+
+![样章页面](images/sample_page.png)
+
+**审阅** – 浏览所有章节，管理章节类型和双语标题：
+
+![审阅页面](images/review_page.png)
+
+**标题编辑器** – 设置章节类型（前言/正文/附录），编辑双语标题，自动编号，AI 翻译：
+
+![标题编辑器](images/title_editor.png)
+
+**内置阅读器** – 原文/译文对照阅读，AI 翻译助手随时解答翻译疑问：
+
+![阅读器](images/reader.png)
+
+**下载** – 逐章下载或合并为完整译本 EPUB：
+
+![完成页面](images/finish_page.png)
 
 ### 快速开始
 
