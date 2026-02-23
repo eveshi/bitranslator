@@ -83,31 +83,28 @@ async function loadNameTable() {
   try {
     const resp = await apiJson(`/api/projects/${state.currentProjectId}/name-map`);
     const nameMap = resp.name_map || {};
-    const entries = Object.entries(nameMap);
+    // Filter out names that only appear once (noise)
+    const entries = Object.entries(nameMap)
+      .filter(([, data]) => (data.total || 0) > 1)
+      .sort((a, b) => (b[1].total || 0) - (a[1].total || 0));
     if (entries.length === 0) {
       container.innerHTML = `<p class="hint">${t("no_name_data")}</p>`;
       return;
     }
-    entries.sort((a, b) => (b[1].total || 0) - (a[1].total || 0));
 
     let html = `<table class="name-table editable-table"><thead><tr>
       <th>${t("original")}</th><th>${t("occurrences")}</th>
       <th>${t("translations_used")}</th>
-      <th>${t("preferred_translation") || "首选译名"}</th>
-      <th>${t("actions") || "操作"}</th>
     </tr></thead><tbody>`;
 
     for (const [orig, data] of entries) {
       const trans = data.translations || {};
       const transEntries = Object.entries(trans).sort((a, b) => b[1] - a[1]);
-      const mainTrans = transEntries.length > 0 ? transEntries[0][0] : "";
 
-      // Translation variants display
       const transHtml = transEntries.map(([tl, c]) =>
         `<span class="name-variant">${esc(tl)} <small>(${c})</small></span>`
       ).join(", ") || `<em class="hint">${t("no_translations") || "未检测到"}</em>`;
 
-      // Inconsistency indicator
       const hasMultiple = transEntries.length > 1;
       const inconsistentClass = hasMultiple ? ' class="inconsistent"' : '';
 
@@ -115,80 +112,105 @@ async function loadNameTable() {
       html += `<td><strong>${esc(orig)}</strong></td>`;
       html += `<td>${data.total || 0}</td>`;
       html += `<td class="trans-variants">${transHtml}</td>`;
-      html += `<td><input class="unify-input" value="${esc(mainTrans)}" placeholder="${t("enter_translation") || "输入译名"}" /></td>`;
-      html += `<td class="name-actions">`;
-      if (hasMultiple) {
-        for (const [variant] of transEntries.slice(1)) {
-          html += `<button class="btn btn-sm btn-unify" data-find="${esc(variant)}" title="${t("replace_all_with_preferred") || "全书替换为首选译名"}">${t("unify") || "统一"} "${esc(variant)}"</button>`;
-        }
-      }
-      html += `<button class="btn btn-sm btn-replace-custom" title="${t("custom_replace") || "自定义搜索替换"}">${t("search_replace") || "搜索替换"}</button>`;
-      html += `</td></tr>`;
+      html += `</tr>`;
     }
     html += "</tbody></table>";
     container.innerHTML = html;
 
-    // Unify buttons — replace specific variant with preferred
-    container.querySelectorAll(".btn-unify").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const row = btn.closest("tr");
-        const replaceInput = row.querySelector(".unify-input");
-        const findText = btn.dataset.find;
-        const replaceText = replaceInput.value.trim();
-        if (!replaceText) { alert(t("enter_translation") || "请输入译名"); return; }
-        if (findText === replaceText) return;
-        btn.disabled = true; btn.textContent = "…";
-        try {
-          const resp = await apiJson(`/api/projects/${state.currentProjectId}/unify-name`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ find: findText, replace: replaceText }),
-          });
-          alert(t("unify_done").replace("{n}", resp.replaced));
-          await loadNameTable();
-        } catch (e) { alert("Error: " + e.message); btn.disabled = false; btn.textContent = `${t("unify")} "${findText}"`; }
-      });
-    });
+    /* ── Unify / replace buttons are disabled for now ──
+     * The name unification feature is experimental and may produce
+     * unexpected results.  The buttons below are commented out until
+     * the matching logic is more reliable.
+     *
+     * container.querySelectorAll(".btn-unify").forEach(btn => { ... });
+     * container.querySelectorAll(".btn-replace-custom").forEach(btn => { ... });
+     */
 
-    // Custom search-replace button — user types what to find
-    container.querySelectorAll(".btn-replace-custom").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const row = btn.closest("tr");
-        const replaceText = row.querySelector(".unify-input").value.trim();
-        if (!replaceText) { alert(t("enter_translation") || "请输入译名"); return; }
-        const findText = prompt(t("enter_find_text") || "输入要替换的文本（将在全书中被替换为首选译名）：");
-        if (!findText || !findText.trim() || findText.trim() === replaceText) return;
-        btn.disabled = true; btn.textContent = "…";
-        try {
-          const resp = await apiJson(`/api/projects/${state.currentProjectId}/unify-name`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ find: findText.trim(), replace: replaceText }),
-          });
-          alert(t("unify_done").replace("{n}", resp.replaced));
-          await loadNameTable();
-        } catch (e) { alert("Error: " + e.message); btn.disabled = false; btn.textContent = t("search_replace") || "搜索替换"; }
-      });
-    });
   } catch (e) { container.innerHTML = `<p class="hint">${t("no_name_data")}</p>`; }
+}
+
+const _PHASE_LABELS = {
+  extracting: { zh: "提取候选人名…", en: "Extracting candidate names…" },
+  ai_verify:  { zh: "AI 验证人名并生成译名…", en: "AI verifying names & translations…" },
+  searching:  { zh: "在译文中搜索译名…", en: "Searching translations in text…" },
+  done:       { zh: "扫描完成", en: "Scan complete" },
+  error:      { zh: "扫描出错", en: "Scan error" },
+};
+
+function _phaseLabel(phase) {
+  const labels = _PHASE_LABELS[phase];
+  if (!labels) return phase;
+  const lang = (document.documentElement.lang || "zh").startsWith("en") ? "en" : "zh";
+  return labels[lang] || labels.zh;
+}
+
+let _nameScanTimer = null;
+
+function _pollNameScan() {
+  const container = $("#name-table-content");
+  const btn = $("#btn-rescan-names");
+  if (_nameScanTimer) clearInterval(_nameScanTimer);
+
+  const renderProgress = (s) => {
+    const pct = s.total > 0 ? Math.round((s.done / s.total) * 100) : 0;
+    const bar = s.total > 0
+      ? `<div class="progress-bar" style="margin:.6rem 0"><div class="progress-fill" style="width:${pct}%"></div></div>`
+      : '';
+    container.innerHTML = `
+      <div style="text-align:center;padding:2rem 0">
+        <div class="spinner" style="margin:0 auto .8rem"></div>
+        <p><strong>${_phaseLabel(s.phase)}</strong></p>
+        ${bar}
+        <p class="hint">${s.detail || ''}${s.total > 0 ? ` (${s.done}/${s.total})` : ''}</p>
+        <p class="hint" style="margin-top:.5rem">${t("scan_bg_hint") || "扫描在后台运行，可以关闭此面板，稍后再回来查看结果。"}</p>
+      </div>`;
+  };
+
+  // Show initial state immediately
+  renderProgress({ phase: "extracting", detail: "", done: 0, total: 0 });
+  btn.disabled = true;
+  btn.textContent = t("scanning") || "扫描中…";
+
+  _nameScanTimer = setInterval(async () => {
+    try {
+      const s = await apiJson(`/api/projects/${state.currentProjectId}/rescan-names/status`);
+      if (s.finished) {
+        clearInterval(_nameScanTimer); _nameScanTimer = null;
+        btn.disabled = false;
+        btn.textContent = t("rescan_names") || "🔄 重新扫描全书人名";
+        if (s.phase === "error") {
+          container.innerHTML = `<p class="hint" style="color:var(--danger,red)">⚠️ ${s.detail}</p>`;
+        } else {
+          await loadNameTable();
+        }
+        return;
+      }
+      renderProgress(s);
+    } catch (_) {}
+  }, 2000);
 }
 
 export function initReview() {
   // Name table overlay
   $("#btn-toggle-name-table").addEventListener("click", async () => {
     show($("#name-table-overlay"));
+    try {
+      const s = await apiJson(`/api/projects/${state.currentProjectId}/rescan-names/status`);
+      if (s.running) { _pollNameScan(); return; }
+    } catch (_) {}
     await loadNameTable();
   });
   $("#btn-close-name-table").addEventListener("click", () => hide($("#name-table-overlay")));
   $("#btn-cancel-name-table").addEventListener("click", () => hide($("#name-table-overlay")));
 
-  // Rescan names
+  // Rescan names (background + polling)
   $("#btn-rescan-names").addEventListener("click", async () => {
     const btn = $("#btn-rescan-names");
-    btn.disabled = true; btn.textContent = t("scanning") || "扫描中…";
+    btn.disabled = true;
     try {
       await apiJson(`/api/projects/${state.currentProjectId}/rescan-names`, { method: "POST" });
-      await loadNameTable();
-    } catch (e) { alert("Error: " + e.message); }
-    finally { btn.disabled = false; btn.textContent = t("rescan_names") || "🔄 重新扫描全书人名"; }
+      _pollNameScan();
+    } catch (e) { alert("Error: " + e.message); btn.disabled = false; }
   });
 
   // Translate more chapters

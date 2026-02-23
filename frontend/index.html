@@ -441,7 +441,8 @@
             <h3 data-i18n="name_table">📋 全书人名表</h3>
             <button class="btn-icon" id="btn-close-name-table">✕</button>
           </div>
-          <p class="hint" data-i18n="name_table_hint">显示翻译过程中检测到的所有人名及其译名，可一键统一不一致的译名</p>
+          <p class="hint" data-i18n="name_table_hint">显示翻译过程中检测到的出现两次以上的人名及其译名。仅显示人名统计，不包含一次性出现的名字。</p>
+          <p class="hint" style="color:var(--warning,#e6a817);font-weight:600;" data-i18n="name_table_experimental">⚠️ 此功能仍为实验性功能，人名匹配和译名检测可能不完全准确。一键统一译名功能暂未开放。</p>
           <div class="te-toolbar">
             <button class="btn btn-outline btn-sm" id="btn-rescan-names" data-i18n="rescan_names">🔄 重新扫描全书人名</button>
             <span class="hint" data-i18n="rescan_names_hint">重新扫描所有已翻译章节，更新人名统计</span>

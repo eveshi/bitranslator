@@ -692,6 +692,60 @@ def _phonetic_similarity(english_name: str, chinese_token: str) -> float:
     return first_match * 0.5 + lcs_ratio * 0.5
 
 
+# Matches: 1-8 CJK/Kana chars immediately before a parenthesised Latin name.
+# Group 1 = translated name (CJK token), Group 2 = original name (Latin).
+_ANNOTATION_RE = re.compile(
+    r'([\u4e00-\u9fff\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff]{1,8})'
+    r'[（(]'
+    r'([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s\-\'\.]{0,40})'
+    r'[)）]'
+)
+
+
+def _extract_annotation_pairs(translated_text: str) -> dict[str, set[str]]:
+    """Extract {original_name: {translated_variant, ...}} from parenthetical
+    annotations like 默里（Murray） or 贝克街（Baker Street）."""
+    pairs: dict[str, set[str]] = {}
+    for m in _ANNOTATION_RE.finditer(translated_text):
+        trans_name = m.group(1).strip()
+        orig_name = m.group(2).strip()
+        if orig_name and trans_name and len(trans_name) <= 8:
+            pairs.setdefault(orig_name, set()).add(trans_name)
+    return pairs
+
+
+def _strip_annotations(text: str) -> str:
+    """Remove parenthetical original-language annotations so that the raw
+    original names inside parentheses are not counted as translation variants."""
+    return _ANNOTATION_RE.sub(lambda m: m.group(1), text)
+
+
+def _is_valid_translation(text: str) -> bool:
+    """Reject strings that are clearly not a name translation."""
+    if not text or len(text) > 20:
+        return False
+    if "\n" in text or "。" in text or "," in text or "." in text:
+        return False
+    return True
+
+
+def _anno_name_matches(anno_orig: str, target_name: str) -> bool:
+    """Check if an annotation's original name matches the target name.
+    Requires exact match (case-insensitive) or that the annotation is one
+    of the space-separated parts of a multi-word target name."""
+    if anno_orig.lower() == target_name.lower():
+        return True
+    # "Murray" in annotation matches target "Murray Donovan"
+    target_parts = target_name.lower().split()
+    if len(target_parts) >= 2 and anno_orig.lower() in target_parts:
+        return True
+    # "John Smith" in annotation matches target "John Smith"
+    anno_parts = anno_orig.lower().split()
+    if len(anno_parts) >= 2 and anno_parts == target_parts:
+        return True
+    return False
+
+
 def _scan_translation_variants(
     original_name: str,
     translated_text: str,
@@ -699,26 +753,29 @@ def _scan_translation_variants(
 ) -> dict[str, int]:
     """Find all translation variants for a name in translated text.
 
-    Uses known translations and original-name retention detection.
+    Uses parenthetical annotations, known translations, and original-name
+    retention detection.  Parenthetical original-language text is stripped
+    before counting to avoid inflating variant stats.
     """
     variants: dict[str, int] = {}
 
+    anno_pairs = _extract_annotation_pairs(translated_text)
+    for anno_orig, trans_set in anno_pairs.items():
+        if _anno_name_matches(anno_orig, original_name):
+            for tname in trans_set:
+                if _is_valid_translation(tname):
+                    variants[tname] = variants.get(tname, 0) + 1
+
+    clean_text = _strip_annotations(translated_text)
+
     for trans in known_translations:
-        if trans and trans in translated_text:
-            variants[trans] = translated_text.count(trans)
+        if trans and _is_valid_translation(trans) and trans in clean_text:
+            variants[trans] = max(variants.get(trans, 0), clean_text.count(trans))
 
-    if original_name in translated_text:
-        cnt = translated_text.count(original_name)
+    if original_name in clean_text:
+        cnt = clean_text.count(original_name)
         if cnt > 0:
-            variants[original_name] = variants.get(original_name, 0) + cnt
-
-    parts = original_name.split()
-    if len(parts) >= 2:
-        for part in parts:
-            if len(part) >= 3 and part in translated_text:
-                cnt = translated_text.count(part)
-                if cnt > 0:
-                    variants[part] = variants.get(part, 0) + cnt
+            variants[original_name] = max(variants.get(original_name, 0), cnt)
 
     return variants
 
@@ -784,20 +841,160 @@ def _update_name_map(project_id: str, original_text: str, translated_text: str) 
     db.update_project(project_id, name_map=json.dumps(name_map, ensure_ascii=False))
 
 
-def rescan_all_names(project_id: str) -> dict:
-    """Re-scan all translated chapters to rebuild the name map from scratch.
+def _precompute_chapter(args: tuple) -> dict:
+    """Pre-compute expensive per-chapter data once (runs in thread pool)."""
+    idx, orig, trans, is_cjk = args
+    anno_pairs = _extract_annotation_pairs(trans)
+    clean = _strip_annotations(trans)
+    cjk_candidates = _extract_cjk_name_candidates(trans) if is_cjk else {}
+    return {
+        "idx": idx,
+        "orig": orig,
+        "clean": clean,
+        "anno_pairs": anno_pairs,
+        "cjk_candidates": cjk_candidates,
+    }
 
-    Uses three methods to find translations:
-    1. Known translations from strategy / analysis
-    2. Original name retained in translated text
-    3. Chapter-level frequency correlation: if a name appears N times in
-       chapter X's original text, find CJK tokens in chapter X's translation
-       that have a similar frequency pattern across all chapters.
+
+def _scan_variants_fast(
+    original_name: str,
+    clean_text: str,
+    anno_pairs: dict[str, set[str]],
+    known_translations: list[str],
+) -> dict[str, int]:
+    """Fast variant scan using pre-computed annotation pairs and stripped text."""
+    variants: dict[str, int] = {}
+
+    for anno_orig, trans_set in anno_pairs.items():
+        if _anno_name_matches(anno_orig, original_name):
+            for tname in trans_set:
+                if _is_valid_translation(tname):
+                    variants[tname] = variants.get(tname, 0) + 1
+
+    for trans in known_translations:
+        if trans and _is_valid_translation(trans) and trans in clean_text:
+            variants[trans] = max(variants.get(trans, 0), clean_text.count(trans))
+
+    if original_name in clean_text:
+        cnt = clean_text.count(original_name)
+        if cnt > 0:
+            variants[original_name] = max(variants.get(original_name, 0), cnt)
+
+    return variants
+
+
+_NAME_VERIFY_SYSTEM = """\
+You are a multilingual name translation expert.
+
+I extracted the following capitalized words from a {source_lang} book (novel / \
+non-fiction).  They MIGHT be character names, but some could be common nouns, \
+place names, or other non-name words that happened to appear capitalized.
+
+Your task for EACH word:
+1. Decide: is this word commonly used as a **person's first name, surname, \
+or nickname** in {source_lang} or other European languages?
+   - Words like "Ray", "Rose", "Grace", "Hunter" ARE names even though they \
+also have other meanings — mark them is_name: true.
+   - Words like "Chapter", "Nothing", "Laboratory", "University" are obviously \
+NOT names — mark them is_name: false.
+   - Place names (e.g. "London", "Stanford"), organization names, and generic \
+titles (e.g. "Doctor", "Professor") should be is_name: false.
+2. If is_name is true, list ALL common {target_lang} translations of this name.
+   Include every variant you know (e.g. "Rachel" → ["蕾切尔", "拉结", "瑞秋"]).
+
+Return a JSON array: [{{"name": "<EXACT original>", "is_name": true/false, \
+"translations": ["t1", "t2"]}}]
+Return the "name" field with EXACT original spelling. For is_name: false, \
+set translations to [].
+ONLY output the JSON array."""
+
+_NAME_BATCH_SIZE = 50
+
+# ── Name-scan progress tracking (in-memory) ────────────────────────────
+
+_name_scan_status: dict[str, dict] = {}
+
+
+def get_name_scan_status(project_id: str) -> dict | None:
+    return _name_scan_status.get(project_id)
+
+
+def _set_name_scan_status(project_id: str, phase: str, detail: str = "",
+                          done: int = 0, total: int = 0, finished: bool = False,
+                          name_map: dict | None = None) -> None:
+    _name_scan_status[project_id] = {
+        "phase": phase, "detail": detail,
+        "done": done, "total": total,
+        "finished": finished, "name_map": name_map,
+    }
+
+
+def _clear_name_scan_status(project_id: str) -> None:
+    _name_scan_status.pop(project_id, None)
+
+
+async def _ai_verify_names(
+    names: list[str], source_lang: str, target_lang: str,
+    project_id: str = "",
+) -> dict[str, list[str]]:
+    """Ask AI to provide translation variants for candidate names.
+    Returns {original_name: [translation_variant, ...]}."""
+    result: dict[str, list[str]] = {}
+    # Build a case-insensitive lookup so we can map AI's response back
+    name_lookup: dict[str, str] = {n.lower().strip(): n for n in names}
+
+    total_batches = (len(names) + _NAME_BATCH_SIZE - 1) // _NAME_BATCH_SIZE
+    for batch_idx, i in enumerate(range(0, len(names), _NAME_BATCH_SIZE)):
+        batch = names[i:i + _NAME_BATCH_SIZE]
+        if project_id:
+            _set_name_scan_status(project_id, "ai_verify",
+                                  f"AI batch {batch_idx + 1}/{total_batches}",
+                                  batch_idx, total_batches)
+        prompt = "Names:\n" + "\n".join(f"- {n}" for n in batch)
+        try:
+            resp = await llm_service.chat_json(
+                system_prompt=_NAME_VERIFY_SYSTEM.format(
+                    source_lang=source_lang, target_lang=target_lang),
+                user_prompt=prompt,
+                max_tokens=4096,
+            )
+            entries = resp if isinstance(resp, list) else resp.get("names", resp.get("result", []))
+            for entry in entries:
+                if not isinstance(entry, dict) or not entry.get("name"):
+                    continue
+                if not entry.get("is_name", True):
+                    continue
+                trans = entry.get("translations", [])
+                if not isinstance(trans, list) or not trans:
+                    continue
+                clean_trans = [t for t in trans if isinstance(t, str) and t.strip()]
+                if not clean_trans:
+                    continue
+                ai_name = entry["name"].strip()
+                canonical = name_lookup.get(ai_name.lower(), ai_name)
+                result[canonical] = clean_trans
+        except Exception as e:
+            log.warning("AI name verification batch failed: %s", e)
+    return result
+
+
+async def rescan_all_names(project_id: str) -> dict:
+    """Re-scan all translated chapters to rebuild the name map.
+
+    Phase 1: Extract candidate names from original text.
+    Phase 2: Ask AI to verify which are real names and get translation variants.
+    Phase 3: Pre-compute per-chapter annotation pairs + stripped text.
+    Phase 4: For each verified name, count occurrences in original text and
+             search all AI-suggested translations + annotation-discovered
+             translations in the translated text.
     """
-    names_to_track = _collect_names_to_track(project_id)
-    chapters = db.get_chapters(project_id)
+    from concurrent.futures import ThreadPoolExecutor
 
-    # Only consider chapters with both original and translated content
+    project = db.get_project(project_id)
+    source_lang = project.get("source_language", "English") if project else "English"
+    target_lang = project.get("target_language", "Chinese") if project else "Chinese"
+
+    chapters = db.get_chapters(project_id)
     paired = []
     for ch in chapters:
         orig = ch.get("original_content") or ""
@@ -809,83 +1006,110 @@ def rescan_all_names(project_id: str) -> dict:
         log.info("No translated chapters for project %s", project_id)
         return {}
 
-    # Detect if target language is CJK
+    # ── Phase 1: collect candidate names ─────────────────────────────
+    all_orig_text = " ".join(orig for orig, _ in paired)
+    raw_names = _extract_names_from_text(all_orig_text)
+
+    # Also include names from strategy / analysis
+    strategy_names: dict[str, str] = {}
+    strategy = db.get_strategy(project_id)
+    if strategy:
+        for n in (strategy.get("character_names") or []):
+            if isinstance(n, dict) and n.get("original"):
+                strategy_names[n["original"]] = n.get("translated", "")
+    analysis = db.get_analysis(project_id)
+    if analysis:
+        for c in (analysis.get("characters") or []):
+            if isinstance(c, dict) and c.get("name"):
+                strategy_names.setdefault(c["name"], "")
+
+    # Merge: only keep names appearing > 1 time, plus all strategy names
+    candidate_names = list(strategy_names.keys())
+    for name, count in raw_names.items():
+        if count > 1 and name not in strategy_names:
+            candidate_names.append(name)
+
+    if not candidate_names:
+        log.info("No candidate names for project %s", project_id)
+        _set_name_scan_status(project_id, "done", finished=True, name_map={})
+        return {}
+
+    _set_name_scan_status(project_id, "extracting",
+                          f"Found {len(candidate_names)} candidates",
+                          done=0, total=len(candidate_names))
+    log.info("Phase 2: asking AI to verify %d candidate names", len(candidate_names))
+
+    # ── Phase 2: AI verification + translation variants ──────────────
+    ai_translations = await _ai_verify_names(
+        candidate_names, source_lang, target_lang, project_id=project_id)
+
+    # Keep names confirmed by AI + all strategy/analysis names (trusted sources)
+    verified_names: dict[str, list[str]] = {}
+    for name in candidate_names:
+        trans_list = ai_translations.get(name, [])
+        if name in strategy_names:
+            # Always keep strategy/analysis names regardless of AI verdict
+            preferred = strategy_names[name]
+            if preferred and preferred not in trans_list:
+                trans_list.insert(0, preferred)
+            verified_names[name] = trans_list
+        elif name in ai_translations:
+            verified_names[name] = trans_list
+
+    log.info("AI verified %d names out of %d candidates", len(verified_names), len(candidate_names))
+    _set_name_scan_status(project_id, "searching",
+                          f"Searching {len(verified_names)} names across {len(paired)} chapters",
+                          done=0, total=len(verified_names))
+
+    # ── Phase 3: pre-compute chapter data in parallel ────────────────
     is_cjk = bool(_HAS_CJK_RE.search(paired[0][1][:500]))
+    tasks = [(i, orig, trans, is_cjk) for i, (orig, trans) in enumerate(paired)]
+    with ThreadPoolExecutor(max_workers=min(8, len(tasks))) as pool:
+        precomputed = list(pool.map(_precompute_chapter, tasks))
+    precomputed.sort(key=lambda d: d["idx"])
 
-    # Pre-compute CJK name candidates per chapter (for correlation)
-    # candidate_vectors[token] = [count_in_ch0, count_in_ch1, ...]
-    candidate_vectors: dict[str, list[int]] = {}
-    if is_cjk:
-        for idx, (_, trans) in enumerate(paired):
-            ch_candidates = _extract_cjk_name_candidates(trans)
-            for token, cnt in ch_candidates.items():
-                if token not in candidate_vectors:
-                    candidate_vectors[token] = [0] * len(paired)
-                candidate_vectors[token][idx] = cnt
-
+    # ── Phase 4: local search with AI-provided translations ──────────
     name_map: dict = {}
+    search_idx = 0
 
-    for entry in names_to_track:
-        orig_name = entry["original"]
+    for orig_name, ai_trans_list in verified_names.items():
+        search_idx += 1
+        if search_idx % 20 == 0:
+            _set_name_scan_status(project_id, "searching", orig_name,
+                                  done=search_idx, total=len(verified_names))
         total = 0
         all_translations: dict[str, int] = {}
 
-        # Build this name's per-chapter frequency vector
-        name_vector: list[int] = []
-        for orig_text, trans_text in paired:
-            count_in_orig = orig_text.count(orig_name)
-            name_vector.append(count_in_orig)
+        for pc in precomputed:
+            count_in_orig = pc["orig"].count(orig_name)
             total += count_in_orig
 
-            # Methods 1 & 2: known translations + original name retention
-            known_trans = [entry.get("translated", "")]
-            known_trans += list(all_translations.keys())
-            variants = _scan_translation_variants(orig_name, trans_text, known_trans)
-            for t_name, cnt in variants.items():
-                all_translations[t_name] = all_translations.get(t_name, 0) + cnt
+            # Search annotation-extracted translations
+            for anno_orig, trans_set in pc["anno_pairs"].items():
+                if _anno_name_matches(anno_orig, orig_name):
+                    for tname in trans_set:
+                        if _is_valid_translation(tname):
+                            all_translations[tname] = all_translations.get(tname, 0) + 1
 
-        # Method 3: chapter-level frequency correlation + phonetic matching
-        if is_cjk and total > 0:
-            name_chapters = {i for i, c in enumerate(name_vector) if c > 0}
-            if name_chapters:
-                best_candidates: list[tuple[str, float, int]] = []
+            # Search AI-suggested translations in cleaned text
+            for trans_candidate in ai_trans_list:
+                if trans_candidate and trans_candidate in pc["clean"]:
+                    cnt = pc["clean"].count(trans_candidate)
+                    all_translations[trans_candidate] = (
+                        all_translations.get(trans_candidate, 0) + cnt)
 
-                for token, tvec in candidate_vectors.items():
-                    if token in all_translations:
-                        continue
-                    token_chapters = {i for i, c in enumerate(tvec) if c > 0}
-                    if not token_chapters:
-                        continue
+            # Check if original name retained in translation
+            if orig_name in pc["clean"]:
+                cnt = pc["clean"].count(orig_name)
+                all_translations[orig_name] = (
+                    all_translations.get(orig_name, 0) + cnt)
 
-                    intersection = len(name_chapters & token_chapters)
-                    if intersection == 0:
-                        continue
-
-                    recall = intersection / len(name_chapters)
-                    precision = intersection / len(token_chapters)
-                    cooccurrence_score = (recall + precision) / 2
-
-                    # Phonetic similarity as boost
-                    phon_score = _phonetic_similarity(orig_name, token)
-
-                    # Combined score: co-occurrence is primary, phonetics is bonus
-                    combined = cooccurrence_score * 0.6 + phon_score * 0.4
-
-                    token_total = sum(tvec)
-                    if combined >= 0.35 and intersection >= 1:
-                        best_candidates.append((token, combined, token_total))
-
-                # Take top candidates (avoid adding too many false positives)
-                best_candidates.sort(key=lambda x: x[1], reverse=True)
-                for token, score, cnt in best_candidates[:3]:
-                    if token not in all_translations:
-                        all_translations[token] = cnt
-
-        if total > 0 or all_translations:
+        if total > 1:
             name_map[orig_name] = {"total": total, "translations": all_translations}
 
     db.update_project(project_id, name_map=json.dumps(name_map, ensure_ascii=False))
     log.info("Rescanned names for project %s: %d names found", project_id, len(name_map))
+    _set_name_scan_status(project_id, "done", finished=True, name_map=name_map)
     return name_map
 
 

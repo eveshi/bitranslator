@@ -686,13 +686,41 @@ async def get_name_map(project_id: str):
 
 
 @router.post("/projects/{project_id}/rescan-names")
-async def rescan_names(project_id: str):
-    """Re-scan all translated chapters to rebuild the name map from scratch."""
+async def rescan_names(project_id: str, background_tasks: BackgroundTasks):
+    """Start a background name re-scan. Poll /rescan-names/status for progress."""
     p = db.get_project(project_id)
     if not p:
         raise HTTPException(404, "Project not found")
-    name_map = translation_service.rescan_all_names(project_id)
-    return {"ok": True, "name_map": name_map, "count": len(name_map)}
+    existing = translation_service.get_name_scan_status(project_id)
+    if existing and not existing.get("finished"):
+        return {"ok": True, "message": "Scan already in progress"}
+    background_tasks.add_task(_run_rescan_names, project_id)
+    return {"ok": True, "message": "Name scan started"}
+
+
+async def _run_rescan_names(project_id: str):
+    try:
+        await translation_service.rescan_all_names(project_id)
+    except Exception as e:
+        log.exception("Name scan failed for %s", project_id)
+        translation_service._set_name_scan_status(
+            project_id, "error", str(e), finished=True)
+
+
+@router.get("/projects/{project_id}/rescan-names/status")
+async def rescan_names_status(project_id: str):
+    """Poll name-scan progress."""
+    status = translation_service.get_name_scan_status(project_id)
+    if not status:
+        return {"running": False, "finished": False}
+    return {
+        "running": not status.get("finished", False),
+        "finished": status.get("finished", False),
+        "phase": status.get("phase", ""),
+        "detail": status.get("detail", ""),
+        "done": status.get("done", 0),
+        "total": status.get("total", 0),
+    }
 
 
 @router.post("/projects/{project_id}/unify-name")
