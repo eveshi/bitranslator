@@ -40,6 +40,8 @@ export function collectStrategyEdits() {
     cultural_adaptation: $("#strat-cultural").value,
     special_considerations: $("#strat-special").value,
     custom_instructions: $("#strat-custom").value,
+    annotate_terms: $("#strat-annotate-terms").checked,
+    annotate_names: $("#strat-annotate-names").checked,
     character_names: names, glossary,
   };
 }
@@ -55,6 +57,8 @@ export async function showStrategy() {
     $("#strat-cultural").value = s.cultural_adaptation || "";
     $("#strat-special").value = s.special_considerations || "";
     $("#strat-custom").value = s.custom_instructions || "";
+    $("#strat-annotate-terms").checked = !!s.annotate_terms;
+    $("#strat-annotate-names").checked = !!s.annotate_names;
 
     const chapters = await apiJson(`/api/projects/${state.currentProjectId}/chapters`);
     state.totalChapterCount = chapters.length;

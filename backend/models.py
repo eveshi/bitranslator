@@ -106,6 +106,8 @@ class StrategyOut(BaseModel):
     cultural_adaptation: str = ""
     special_considerations: str = ""
     custom_instructions: str = ""
+    annotate_terms: bool = False
+    annotate_names: bool = False
     raw_strategy: str = ""
 
 
@@ -117,6 +119,8 @@ class StrategyUpdate(BaseModel):
     cultural_adaptation: Optional[str] = None
     special_considerations: Optional[str] = None
     custom_instructions: Optional[str] = None
+    annotate_terms: Optional[bool] = None
+    annotate_names: Optional[bool] = None
 
 
 class TranslationProgress(BaseModel):
@@ -125,6 +129,9 @@ class TranslationProgress(BaseModel):
     total_chapters: int
     translated_chapters: int
     current_chapter: Optional[str] = None
+    current_chapter_index: Optional[int] = None
+    chunk_done: int = 0
+    chunk_total: int = 0
 
 
 class FeedbackRequest(BaseModel):

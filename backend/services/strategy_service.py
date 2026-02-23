@@ -103,6 +103,12 @@ async def generate_strategy(project_id: str) -> dict:
     if custom:
         strategy_data["custom_instructions"] = custom
 
+    # Preserve user-set annotation flags across regeneration
+    if existing_strategy:
+        for key in ("annotate_terms", "annotate_names"):
+            if key in existing_strategy and key not in strategy_data:
+                strategy_data[key] = existing_strategy[key]
+
     db.save_strategy(project_id, strategy_data)
     db.update_project(project_id, status="strategy_generated")
     log.info("Strategy generated for project %s", project_id)

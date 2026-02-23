@@ -479,7 +479,7 @@ body { font-family: serif; line-height: 1.8; margin: 1em; }
 h1 { font-size: 1.6em; margin: 1.2em 0 0.6em; text-align: center; }
 h2 { font-size: 1.3em; margin: 1em 0 0.5em; }
 h3 { font-size: 1.1em; margin: 0.8em 0 0.4em; }
-p { text-indent: 2em; margin: 0.4em 0; }
+p { text-indent: 2em; margin: 0.8em 0; }
 .separator { text-align: center; margin: 1.5em 0; color: #888; }
 """
 
@@ -541,6 +541,9 @@ def _similarity(a: str, b: str) -> float:
     return len(sa & sb) / max(len(sa | sb), 1)
 
 
+_PARAGRAPH_STYLE = '<style>p { margin: 0.8em 0; }</style>'
+
+
 def _replace_body_text(original_html: str, translated_text: str,
                        bilingual_title: str = "") -> str:
     """Replace the body content of an HTML document with translated text,
@@ -552,6 +555,10 @@ def _replace_body_text(original_html: str, translated_text: str,
 
     original_heading = _find_heading(body)
     body.clear()
+
+    # Inject paragraph spacing override
+    style_tag = BeautifulSoup(_PARAGRAPH_STYLE, "html.parser")
+    body.append(style_tag)
 
     title_for_html = bilingual_title or original_heading or ""
     html_body = _text_to_html_body(translated_text, title_for_html)

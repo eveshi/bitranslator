@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BiTranslator – 智能全书翻译</title>
-  <link rel="stylesheet" href="style.css?v=16" />
+  <link rel="stylesheet" href="style.css?v=18" />
 </head>
 <body>
   <div id="app">
@@ -224,6 +224,23 @@
             <label>特殊注意事项</label>
             <textarea id="strat-special" rows="3"></textarea>
           </div>
+          <div class="strategy-field full-width annotation-options">
+            <label data-i18n="annotation_options">标注选项</label>
+            <div class="checkbox-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="strat-annotate-terms">
+                <span data-i18n="annotate_terms">对无通用标准译名的书名、地名、专业术语，在每次请求文本中首次出现时用括号标注原文</span>
+              </label>
+            </div>
+            <div class="checkbox-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="strat-annotate-names">
+                <span data-i18n="annotate_names">对非主角人名，在每次请求文本中首次出现时用括号标注原文；同一句出现大量不重要人名时仅标注关键角色</span>
+              </label>
+            </div>
+            <p class="hint" data-i18n="annotate_hint">例：默里（Murray）和汤普森（Thompson）走进房间，侍者汉斯递上了菜单。← 汉斯为一次性角色，不标注。日内瓦、霍格沃茨等有公认译名的地名不标注。</p>
+          </div>
+
           <div class="strategy-field full-width">
             <label data-i18n="character_names">角色名翻译</label>
             <p class="hint editable-hint" data-i18n="click_to_edit_names">✏️ 点击单元格可直接编辑名称和译文</p>
@@ -460,6 +477,6 @@
     </main>
   </div>
 
-  <script type="module" src="app.js?v=15"></script>
+  <script type="module" src="app.js?v=16"></script>
 </body>
 </html>

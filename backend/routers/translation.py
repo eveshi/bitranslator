@@ -81,7 +81,7 @@ async def start_analysis(project_id: str, background_tasks: BackgroundTasks):
     p = db.get_project(project_id)
     if not p:
         raise HTTPException(404, "Project not found")
-    if p["status"] not in ("uploaded", "analyzed", "error"):
+    if p["status"] in ("uploading", "analyzing"):
         raise HTTPException(400, f"Cannot analyze in status '{p['status']}'")
 
     background_tasks.add_task(_run_analysis, project_id)
@@ -109,7 +109,7 @@ async def refine_analysis(project_id: str, req: FeedbackRequest, background_task
     p = db.get_project(project_id)
     if not p:
         raise HTTPException(404, "Project not found")
-    if p["status"] not in ("analyzed", "strategy_generated", "sample_ready", "error"):
+    if p["status"] in ("uploading", "analyzing"):
         raise HTTPException(400, f"Cannot refine analysis in status '{p['status']}'")
 
     db.update_project(project_id, status="analyzing")
@@ -132,7 +132,7 @@ async def generate_strategy(project_id: str, background_tasks: BackgroundTasks):
     p = db.get_project(project_id)
     if not p:
         raise HTTPException(404, "Project not found")
-    if p["status"] not in ("analyzed", "generating_strategy", "strategy_generated", "sample_ready", "error"):
+    if p["status"] in ("uploading", "analyzing"):
         raise HTTPException(400, f"Cannot generate strategy in status '{p['status']}'")
 
     db.update_project(project_id, status="generating_strategy")
@@ -193,7 +193,7 @@ async def translate_sample(
     p = db.get_project(project_id)
     if not p:
         raise HTTPException(404, "Project not found")
-    if p["status"] not in ("strategy_generated", "sample_ready", "error"):
+    if p["status"] in ("uploading", "analyzing"):
         raise HTTPException(400, f"Cannot translate sample in status '{p['status']}'")
 
     background_tasks.add_task(_run_sample, project_id, chapter_index)
@@ -219,7 +219,7 @@ async def translate_all(
     p = db.get_project(project_id)
     if not p:
         raise HTTPException(404, "Project not found")
-    if p["status"] not in ("sample_ready", "strategy_generated", "stopped", "completed", "error"):
+    if p["status"] in ("uploading", "analyzing"):
         raise HTTPException(400, f"Cannot start full translation in status '{p['status']}'")
 
     start = req.start_chapter if req else 0
@@ -247,12 +247,21 @@ async def get_progress(project_id: str):
     chapters = db.get_chapters(project_id)
     translated = sum(1 for c in chapters if c["status"] == "translated")
     current = next((c["title"] for c in chapters if c["status"] == "translating"), None)
+    current_idx = next((c["chapter_index"] for c in chapters if c["status"] == "translating"), None)
+
+    chunk_info = translation_service.get_chunk_progress(project_id)
+    chunk_done = chunk_info["chunk_done"] if chunk_info else 0
+    chunk_total = chunk_info["chunk_total"] if chunk_info else 0
+
     return TranslationProgress(
         project_id=project_id,
         status=p["status"],
         total_chapters=len(chapters),
         translated_chapters=translated,
         current_chapter=current,
+        current_chapter_index=current_idx,
+        chunk_done=chunk_done,
+        chunk_total=chunk_total,
     )
 
 

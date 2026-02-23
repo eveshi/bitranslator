@@ -100,6 +100,53 @@ def _build_strategy_text(strategy: dict) -> str:
         for n in names:
             parts.append(f"  {n.get('original','')} → {n.get('translated','')} ({n.get('note','')})")
 
+    # Annotation rules
+    annotations = []
+    if strategy.get("annotate_terms"):
+        annotations.append(
+            "IMPORTANT – Original-text annotations for terms and place names:\n"
+            "Only annotate terms/places that LACK a widely-accepted standard "
+            "translation. On the FIRST occurrence in the ENTIRE text chunk you "
+            "receive (not per-paragraph), append the original in parentheses.\n"
+            "DO annotate: fictional place names, obscure locations, niche jargon, "
+            "book titles without an official published translation, invented or "
+            "author-specific terminology.\n"
+            "DO NOT annotate: country names, major world cities, well-known "
+            "fictional places with established translations (e.g. 霍格沃茨, "
+            "纳尼亚), common scientific terms with standard translations "
+            "(e.g. 化学实验室, 血红细胞, 脱氧核糖核酸).\n"
+            "Example: 他来自格林德沃（Grindelwald），曾在日内瓦大学研读过暗物质理论"
+            "（Dark Matter Theory）。  ← 'Grindelwald' (obscure village) is "
+            "annotated; '日内瓦' (Geneva, well-known city) is not."
+        )
+    if strategy.get("annotate_names"):
+        protagonist_names = []
+        for n in strategy.get("character_names", []):
+            if isinstance(n, dict) and n.get("original"):
+                protagonist_names.append(n["original"])
+        exclude_note = ""
+        if protagonist_names:
+            exclude_note = (
+                f"\nThe following protagonist names are already fixed in the "
+                f"translation strategy and must NOT be annotated: "
+                f"{', '.join(protagonist_names)}."
+            )
+        annotations.append(
+            "IMPORTANT – Original-text annotations for character names:\n"
+            "For non-protagonist names, annotate ONLY the FIRST occurrence in "
+            "the ENTIRE text chunk you receive (not per-paragraph).\n"
+            "When multiple unfamiliar names appear in the same sentence, use "
+            "your judgment: annotate only the 2-3 most important or recurring "
+            "ones; skip names that appear only once in passing or are clearly "
+            "minor (e.g. a waiter, a mentioned-once relative).\n"
+            "Example: 默里（Murray）和汤普森（Thompson）走进了房间，侍者汉斯递上了菜单。"
+            " ← Murray and Thompson are annotated; Hans (minor, one-off) is not."
+            + exclude_note
+        )
+    if annotations:
+        parts.append("\n── Annotation Rules ──")
+        parts.extend(annotations)
+
     return "\n".join(parts)
 
 
@@ -153,6 +200,33 @@ def _is_cancelled(project_id: str) -> bool:
 
 def _clear_cancel(project_id: str) -> None:
     _cancel_flags.pop(project_id, None)
+
+
+class _StopRequested(Exception):
+    """Raised when user-requested stop is detected between chunks."""
+
+
+# ── Chunk-level progress tracking (in-memory) ──────────────────────────
+
+_chunk_progress: dict[str, dict] = {}
+
+
+def get_chunk_progress(project_id: str) -> dict | None:
+    return _chunk_progress.get(project_id)
+
+
+def _set_chunk_progress(project_id: str, chapter_index: int, chapter_title: str,
+                        chunk_done: int, chunk_total: int) -> None:
+    _chunk_progress[project_id] = {
+        "chapter_index": chapter_index,
+        "chapter_title": chapter_title,
+        "chunk_done": chunk_done,
+        "chunk_total": chunk_total,
+    }
+
+
+def _clear_chunk_progress(project_id: str) -> None:
+    _chunk_progress.pop(project_id, None)
 
 
 # ── Core translation ────────────────────────────────────────────────────
@@ -241,9 +315,20 @@ async def translate_chapter(
     log.info("Translating chapter %d (%s): %d chars → %d chunk(s)",
              chapter["chapter_index"], chapter["title"], len(text), len(chunks))
 
+    ch_idx = chapter["chapter_index"]
+    ch_title = chapter["title"]
+    _set_chunk_progress(project_id, ch_idx, ch_title, 0, len(chunks))
+
     translated_parts = []
     for i, chunk in enumerate(chunks):
-        chunk_label = chapter["title"]
+        # Check cancellation between chunks so stop takes effect mid-chapter
+        if _is_cancelled(project_id):
+            if translated_parts:
+                partial = "\n\n".join(translated_parts)
+                db.update_chapter(chapter_id, translated_content=partial, status="pending")
+            raise _StopRequested()
+
+        chunk_label = ch_title
         if len(chunks) > 1:
             chunk_label += f" (part {i + 1}/{len(chunks)})"
 
@@ -264,6 +349,7 @@ async def translate_chapter(
         # Save progress incrementally so we don't lose work
         partial = "\n\n".join(translated_parts)
         db.update_chapter(chapter_id, translated_content=partial)
+        _set_chunk_progress(project_id, ch_idx, ch_title, i + 1, len(chunks))
 
     full_translation = "\n\n".join(translated_parts)
 
@@ -391,28 +477,34 @@ async def translate_all(
                          sample_ch["chapter_index"] + 1, completeness * 100)
                 db.update_chapter(sample_ch["id"], status="pending", translated_content="")
 
-    for ch in target_chapters:
-        if _is_cancelled(project_id):
-            _clear_cancel(project_id)
-            db.update_project(project_id, status="stopped",
-                              error_message="Translation stopped by user")
-            log.info("Translation stopped by user for project %s at chapter %d",
-                     project_id, ch["chapter_index"])
-            return
+    try:
+        for ch in target_chapters:
+            if _is_cancelled(project_id):
+                raise _StopRequested()
 
-        fresh = db.get_chapter(ch["id"])
-        if fresh["status"] == "translated" and fresh.get("translated_content"):
-            continue
+            fresh = db.get_chapter(ch["id"])
+            if fresh["status"] == "translated" and fresh.get("translated_content"):
+                continue
 
-        try:
-            await translate_chapter(project_id, ch["id"])
-        except Exception as e:
-            log.error("Failed to translate chapter %s: %s", ch["id"], e)
-            db.update_chapter(ch["id"], status="pending")
-            db.update_project(project_id, status="error",
-                              error_message=f"Failed at chapter {ch['chapter_index'] + 1}: {e}")
-            raise
+            try:
+                await translate_chapter(project_id, ch["id"])
+            except _StopRequested:
+                raise
+            except Exception as e:
+                log.error("Failed to translate chapter %s: %s", ch["id"], e)
+                db.update_chapter(ch["id"], status="pending")
+                db.update_project(project_id, status="error",
+                                  error_message=f"Failed at chapter {ch['chapter_index'] + 1}: {e}")
+                raise
+    except _StopRequested:
+        _clear_cancel(project_id)
+        _clear_chunk_progress(project_id)
+        db.update_project(project_id, status="stopped",
+                          error_message="Translation stopped by user")
+        log.info("Translation stopped by user for project %s", project_id)
+        return
 
+    _clear_chunk_progress(project_id)
     # Check if ALL chapters in the project are done
     refreshed = db.get_chapters(project_id)
     all_done = all(c["status"] == "translated" for c in refreshed)

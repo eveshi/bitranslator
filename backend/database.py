@@ -83,6 +83,8 @@ _MIGRATIONS = [
     "ALTER TABLE chapters ADD COLUMN chapter_type TEXT NOT NULL DEFAULT 'chapter'",
     "ALTER TABLE projects ADD COLUMN name_map TEXT DEFAULT ''",
     "ALTER TABLE chapters ADD COLUMN body_number INTEGER",
+    "ALTER TABLE strategies ADD COLUMN annotate_terms INTEGER DEFAULT 0",
+    "ALTER TABLE strategies ADD COLUMN annotate_names INTEGER DEFAULT 0",
 ]
 
 
@@ -243,8 +245,9 @@ def save_strategy(project_id: str, data: dict) -> None:
         conn.execute(
             "INSERT OR REPLACE INTO strategies "
             "(project_id, overall_approach, tone_and_style, character_names, glossary, "
-            "cultural_adaptation, special_considerations, custom_instructions, raw_strategy) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            "cultural_adaptation, special_considerations, custom_instructions, raw_strategy, "
+            "annotate_terms, annotate_names) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (
                 project_id,
                 data.get("overall_approach", ""),
@@ -255,6 +258,8 @@ def save_strategy(project_id: str, data: dict) -> None:
                 data.get("special_considerations", ""),
                 data.get("custom_instructions", ""),
                 data.get("raw_strategy", ""),
+                1 if data.get("annotate_terms") else 0,
+                1 if data.get("annotate_names") else 0,
             ),
         )
 
@@ -267,6 +272,8 @@ def get_strategy(project_id: str) -> dict | None:
     d = dict(row)
     for key in ("character_names", "glossary"):
         d[key] = _json_loads(d.get(key))
+    d["annotate_terms"] = bool(d.get("annotate_terms", 0))
+    d["annotate_names"] = bool(d.get("annotate_names", 0))
     return d
 
 

@@ -315,4 +315,5 @@ bitranslator/
 | feat | Add routing to enable direct navigation to specific books and pages / 增加路由，支持直接跳转到指定项目和页面 |
 | feat | Introduce subpages with back navigation support / 支持子页面及返回导航 |
 | feat | Support multi-part book structures (e.g., Part I, Part II) in addition to chapters / 支持多“部”结构（如第一部、第二部）以及普通章节 |
+| feat | Refine annotation rules: only annotate terms/places without standard translations; names annotated once per request with selective coverage / 细化标注规则：仅标注无通用译名的术语/地名；人名每请求一次且选择性标注 |
 | feat | Allow users to edit character names and unify translated character names / 支持用户编辑角色名并统一译文中的人名 |

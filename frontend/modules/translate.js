@@ -23,6 +23,10 @@ export function startTranslation(startEl, endEl) {
 }
 
 export async function updateProgressUI(progress) {
+  const chunkDone = progress.chunk_done || 0;
+  const chunkTotal = progress.chunk_total || 1;
+  const chunkFraction = chunkTotal > 0 ? chunkDone / chunkTotal : 0;
+
   try {
     const data = await apiJson(`/api/projects/${state.currentProjectId}/chapter-files`);
     const rs = state.translateRangeStart;
@@ -30,19 +34,30 @@ export async function updateProgressUI(progress) {
     const rangeChapters = data.chapters.filter(ch => ch.chapter_index >= rs && ch.chapter_index <= re);
     const total = rangeChapters.length || progress.total_chapters;
     const translated = rangeChapters.filter(ch => ch.status === "translated").length;
-    const pct = total > 0 ? Math.round((translated / total) * 100) : 0;
+    const smoothProgress = translated + (progress.current_chapter ? chunkFraction : 0);
+    const pct = total > 0 ? Math.min(100, Math.round((smoothProgress / total) * 100)) : 0;
     $("#progress-fill").style.width = pct + "%";
-    $("#progress-text").textContent =
-      `${translated} / ${total} ${t("items_translated") || "项已翻译"} (${pct}%)` +
-      (progress.current_chapter ? ` · ${t("translating") || "翻译中…"} ${progress.current_chapter}` : "");
+
+    let statusText = `${translated} / ${total} ${t("items_translated") || "项已翻译"} (${pct}%)`;
+    if (progress.current_chapter) {
+      const chunkHint = chunkTotal > 1 ? ` [${chunkDone}/${chunkTotal}]` : "";
+      statusText += ` · ${t("translating") || "翻译中…"} ${progress.current_chapter}${chunkHint}`;
+    }
+    $("#progress-text").textContent = statusText;
     renderChapterStatusList(rangeChapters, "#chapter-status-list", true);
   } catch (_) {
-    const pct = progress.total_chapters > 0
-      ? Math.round((progress.translated_chapters / progress.total_chapters) * 100) : 0;
+    const translated = progress.translated_chapters;
+    const total = progress.total_chapters;
+    const smoothProgress = translated + (progress.current_chapter ? chunkFraction : 0);
+    const pct = total > 0 ? Math.min(100, Math.round((smoothProgress / total) * 100)) : 0;
     $("#progress-fill").style.width = pct + "%";
-    $("#progress-text").textContent =
-      `${progress.translated_chapters} / ${progress.total_chapters} ${t("items_translated") || "项已翻译"} (${pct}%)` +
-      (progress.current_chapter ? ` · ${t("translating") || "翻译中…"} ${progress.current_chapter}` : "");
+
+    let statusText = `${translated} / ${total} ${t("items_translated") || "项已翻译"} (${pct}%)`;
+    if (progress.current_chapter) {
+      const chunkHint = chunkTotal > 1 ? ` [${chunkDone}/${chunkTotal}]` : "";
+      statusText += ` · ${t("translating") || "翻译中…"} ${progress.current_chapter}${chunkHint}`;
+    }
+    $("#progress-text").textContent = statusText;
   }
 }
 
@@ -83,11 +98,11 @@ export function initTranslate() {
 
   // Stop translation
   $("#btn-stop-translate").addEventListener("click", async () => {
-    if (!confirm("确认停止翻译？已翻译的章节不会丢失，您可以稍后继续。")) return;
+    if (!confirm(t("confirm_stop") || "确认停止翻译？当前文本块翻译完成后将立即停止，已翻译内容不会丢失。")) return;
     try {
       await apiJson(`/api/projects/${state.currentProjectId}/translate/stop`, { method: "POST" });
       $("#btn-stop-translate").disabled = true;
-      $("#btn-stop-translate").textContent = "正在停止…";
+      $("#btn-stop-translate").textContent = t("stopping_hint") || "⏳ 等待当前文本块完成后停止…";
     } catch (e) { alert("停止失败: " + e.message); }
   });
 }
