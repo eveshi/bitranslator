@@ -1,6 +1,6 @@
 # BiTranslator – AI-Powered Full-Book Translation
 
-**[English](#english) | [中文](#中文)**
+**[English](#english) | [中文](#中文) | [更新日志 / Changelog](#changelog)**
 
 ---
 
@@ -134,7 +134,8 @@ bitranslator/
 ├── frontend/
 │   ├── index.html          # UI
 │   ├── style.css           # Styles
-│   └── app.js              # Frontend logic (with i18n)
+│   ├── app.js              # Entry point & routing
+│   └── modules/            # Frontend modules (upload, analysis, strategy, etc.)
 ├── data/                   # Runtime data (uploads, database)
 ├── output/                 # Translated EPUB output
 ├── requirements.txt
@@ -274,7 +275,8 @@ bitranslator/
 ├── frontend/
 │   ├── index.html          # 用户界面
 │   ├── style.css           # 样式
-│   └── app.js              # 前端逻辑（含国际化）
+│   ├── app.js              # 入口与路由
+│   └── modules/            # 前端模块（上传、分析、策略等）
 ├── data/                   # 运行时数据（上传文件、数据库）
 ├── output/                 # 翻译输出的 EPUB
 ├── requirements.txt
@@ -298,3 +300,19 @@ bitranslator/
 所有数据存储在本地：
 - SQLite 数据库存储项目信息、章节内容、分析结果和翻译策略
 - 上传的 EPUB 和翻译后的 EPUB 存储在各项目子目录中
+
+---
+
+<a id="changelog"></a>
+## 更新日志 / Changelog
+
+#### 2025-02-20
+
+| 类型 | 内容 |
+|------|------|
+| fix | Resolve API key input recognition issue / 修复 API Key 输入识别问题 |
+| refactor | Reorganize frontend structure and introduce `modules/` directory / 重构前端结构，新增 `modules/` 目录 |
+| feat | Add routing to enable direct navigation to specific books and pages / 增加路由，支持直接跳转到指定项目和页面 |
+| feat | Introduce subpages with back navigation support / 支持子页面及返回导航 |
+| feat | Support multi-part book structures (e.g., Part I, Part II) in addition to chapters / 支持多“部”结构（如第一部、第二部）以及普通章节 |
+| feat | Allow users to edit character names and unify translated character names / 支持用户编辑角色名并统一译文中的人名 |
