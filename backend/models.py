@@ -74,7 +74,8 @@ class ChapterOut(BaseModel):
     chapter_index: int
     title: str
     translated_title: str = ""
-    chapter_type: str = "chapter"  # "chapter", "frontmatter", "backmatter"
+    chapter_type: str = "chapter"  # "chapter", "frontmatter", "backmatter", "part"
+    body_number: Optional[int] = None
     status: str
     original_length: int = 0
     translated_length: int = 0

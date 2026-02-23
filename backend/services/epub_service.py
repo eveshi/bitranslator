@@ -21,12 +21,15 @@ def _new_id() -> str:
 # ── Parsing ─────────────────────────────────────────────────────────────
 
 class ParsedChapter:
-    def __init__(self, index: int, title: str, text: str, html: str, file_name: str):
+    def __init__(self, index: int, title: str, text: str, html: str, file_name: str,
+                 chapter_type: str = "chapter", body_number: int | None = None):
         self.index = index
         self.title = title
         self.text = text          # plain text for LLM
         self.html = html          # original HTML for faithful rebuild
         self.file_name = file_name
+        self.chapter_type = chapter_type  # "chapter", "part", "frontmatter", "backmatter"
+        self.body_number = body_number    # chapter/part number from book's own numbering
 
 
 class ParsedBook:
@@ -47,30 +50,54 @@ def parse_epub(epub_path: str | Path) -> ParsedBook:
     language = book.get_metadata("DC", "language")
     language = language[0][0] if language else "en"
 
+    toc_map = _collect_toc_titles(book.toc)
+
     chapters: list[ParsedChapter] = []
     idx = 0
-    for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
+    for item in _get_spine_ordered_items(book):
+        if isinstance(item, epub.EpubNav):
+            continue
         html_bytes = item.get_content()
         soup = BeautifulSoup(html_bytes, "lxml")
         body = soup.find("body")
         if not body:
             continue
         text = _extract_text(body)
-        if len(text.strip()) < 50:
-            continue  # skip very short items (covers, blank pages, etc.)
+        stripped = text.strip()
 
+        # Very short pages might be divider/part pages — keep them if they
+        # look structural (heading tags or short text matching part patterns)
+        if len(stripped) < 10:
+            continue
+        is_short_page = len(stripped) < 50
+
+        fname = item.get_name()
         heading = _find_heading(body)
-        chapter_title = heading or f"Chapter {idx + 1}"
+        toc_title = _match_toc_title(fname, toc_map)
+        chapter_title = (
+            heading
+            or toc_title
+            or _infer_title_from_text(text)
+            or f"Chapter {idx + 1}"
+        )
+
+        chapter_type = _detect_chapter_type(chapter_title, text, is_short_page)
+
+        # Skip truly empty pages that aren't structural
+        if is_short_page and chapter_type == "chapter" and not heading and not toc_title:
+            continue
 
         chapters.append(ParsedChapter(
             index=idx,
             title=chapter_title,
             text=text,
             html=html_bytes.decode("utf-8", errors="replace"),
-            file_name=item.get_name(),
+            file_name=fname,
+            chapter_type=chapter_type,
         ))
         idx += 1
 
+    _assign_body_numbers(chapters)
     log.info("Parsed EPUB: %s by %s – %d chapters", title, author, len(chapters))
     return ParsedBook(title=title, author=author, language=language, chapters=chapters)
 
@@ -86,6 +113,194 @@ def _find_heading(body: Tag) -> Optional[str]:
         if h and h.get_text(strip=True):
             return h.get_text(strip=True)
     return None
+
+
+def _infer_title_from_text(text: str) -> Optional[str]:
+    """Try to extract a title from the first line of text when no heading tag exists.
+
+    Short first lines that look like titles (chapter markers, short phrases)
+    are returned; long prose-like first lines are not."""
+    first_line = text.strip().split("\n")[0].strip()
+    if not first_line or len(first_line) > 100:
+        return None
+    if re.match(
+        r"^(chapter|part|prologue|epilogue|foreword|preface|introduction|"
+        r"第.{0,6}[章节回部篇卷]|前言|序[章言]?|后记|附录|目录|引[言子]|尾声)",
+        first_line, re.IGNORECASE,
+    ):
+        return first_line
+    if len(first_line) < 60 and not first_line.endswith(
+        (".", "。", "!", "！", "?", "？", ",", "，", ";", "；", "…", '"', "」")
+    ):
+        return first_line
+    return None
+
+
+_PART_RE = re.compile(
+    r"^(part|teil|partie|parte|부|第.{0,4}[部编卷篇]|"
+    r"book|volume|том|livre|band|libro)\b",
+    re.IGNORECASE,
+)
+_FRONT_RE = re.compile(
+    r"^(foreword|preface|prologue|introduction|acknowledgment|dedication|"
+    r"copyright|title\s*page|about\s*the\s*author|"
+    r"前言|序[章言]?|引[言子]|致谢|版权|扉页|献[词辞]|目录|"
+    r"table\s*of\s*contents|contents)\b",
+    re.IGNORECASE,
+)
+_BACK_RE = re.compile(
+    r"^(epilogue|afterword|appendix|glossary|bibliography|index|"
+    r"后记|尾声|附录|术语|参考文献|索引)\b",
+    re.IGNORECASE,
+)
+
+
+def _detect_chapter_type(title: str, text: str, is_short: bool) -> str:
+    """Guess the structural type of a chapter from its title and content length."""
+    t = title.strip()
+    if _FRONT_RE.match(t):
+        return "frontmatter"
+    if _BACK_RE.match(t):
+        return "backmatter"
+    if _PART_RE.match(t):
+        return "part"
+    # Very short pages with roman-numeral-like headings are often part dividers
+    if is_short and re.match(
+        r"^[IVXLCDM]+\.?\s*$|^[一二三四五六七八九十百]+$", t
+    ):
+        return "part"
+    return "chapter"
+
+
+# ── Body number detection ────────────────────────────────────────────────
+
+_CN_NUM = {'零': 0, '〇': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+           '六': 6, '七': 7, '八': 8, '九': 9, '十': 10, '百': 100, '千': 1000}
+
+_ROMAN = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
+
+
+def _chinese_to_int(s: str) -> Optional[int]:
+    if not s:
+        return None
+    result = current = 0
+    for ch in s:
+        v = _CN_NUM.get(ch)
+        if v is None:
+            return None
+        if v >= 10:
+            result += max(current, 1) * v
+            current = 0
+        else:
+            current = current * 10 + v if current and v == 0 else v
+    return (result + current) or None
+
+
+def _roman_to_int(s: str) -> Optional[int]:
+    if not s or not all(c in _ROMAN for c in s.upper()):
+        return None
+    result = 0
+    us = s.upper()
+    for i, ch in enumerate(us):
+        val = _ROMAN[ch]
+        if i + 1 < len(us) and _ROMAN[us[i + 1]] > val:
+            result -= val
+        else:
+            result += val
+    return result or None
+
+
+_CHAP_NUM_RES = [
+    re.compile(r'(?:chapter|kapitel|chapitre|capitolo|capítulo|глава)\s+(\d+)', re.I),
+    re.compile(r'第\s*(\d+)\s*[章节回]'),
+    re.compile(r'第\s*([一二三四五六七八九十百千零〇]+)\s*[章节回]'),
+    re.compile(r'(?:chapter|kapitel|chapitre)\s+([IVXLCDM]+)\b', re.I),
+    re.compile(r'^(\d+)\s*[.:：\-–—\s]'),
+    re.compile(r'^([IVXLCDM]+)\s*[.:：\-–—\s]'),
+]
+
+_PART_NUM_RES = [
+    re.compile(r'(?:part|teil|partie|parte|book|volume|том|livre|band|libro)\s+(\d+)', re.I),
+    re.compile(r'第\s*(\d+)\s*[部编卷篇]'),
+    re.compile(r'第\s*([一二三四五六七八九十百千零〇]+)\s*[部编卷篇]'),
+    re.compile(r'(?:part|teil|partie|book|volume)\s+([IVXLCDM]+)\b', re.I),
+]
+
+
+def _extract_number(title: str, patterns: list[re.Pattern]) -> Optional[int]:
+    for pat in patterns:
+        m = pat.search(title.strip())
+        if not m:
+            continue
+        raw = m.group(1)
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+        cn = _chinese_to_int(raw)
+        if cn is not None:
+            return cn
+        rn = _roman_to_int(raw)
+        if rn is not None:
+            return rn
+    return None
+
+
+def _assign_body_numbers(chapters: list[ParsedChapter]) -> str:
+    """Detect numbering pattern from original titles and assign body_number.
+
+    Returns detected mode: 'continuous' or 'per_part'.
+    """
+    has_parts = any(ch.chapter_type == "part" for ch in chapters)
+
+    # Collect (list_index, detected_number, last_part_list_index) for chapter items
+    last_part_idx = -1
+    chapter_detections: list[tuple[int, Optional[int], int]] = []
+    for i, ch in enumerate(chapters):
+        if ch.chapter_type == "part":
+            last_part_idx = i
+        elif ch.chapter_type == "chapter":
+            num = _extract_number(ch.title, _CHAP_NUM_RES)
+            chapter_detections.append((i, num, last_part_idx))
+
+    # Detect continuous vs per-part numbering
+    mode = "continuous"
+    if has_parts and len(chapter_detections) >= 2:
+        prev_num = None
+        prev_part = -1
+        for _, num, part_idx in chapter_detections:
+            if (num is not None and prev_num is not None
+                    and part_idx > prev_part and part_idx >= 0
+                    and num <= prev_num):
+                mode = "per_part"
+                break
+            if num is not None:
+                prev_num = num
+                prev_part = part_idx
+
+    # Assign body_number
+    part_num = 0
+    ch_num = 0
+    for ch in chapters:
+        if ch.chapter_type == "part":
+            part_num += 1
+            detected = _extract_number(ch.title, _PART_NUM_RES)
+            ch.body_number = detected if detected is not None else part_num
+            if mode == "per_part":
+                ch_num = 0
+        elif ch.chapter_type == "chapter":
+            detected = _extract_number(ch.title, _CHAP_NUM_RES)
+            if detected is not None:
+                ch_num = detected
+            else:
+                ch_num += 1
+            ch.body_number = ch_num
+        else:
+            ch.body_number = None
+
+    log.info("Body number assignment: mode=%s, parts=%d, chapters=%d",
+             mode, part_num, sum(1 for c in chapters if c.chapter_type == "chapter"))
+    return mode
 
 
 # ── Building ────────────────────────────────────────────────────────────

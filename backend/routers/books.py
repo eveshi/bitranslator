@@ -75,6 +75,8 @@ async def create_project(
             "title": ch.title,
             "original_content": ch.text,
             "epub_file_name": ch.file_name,
+            "chapter_type": ch.chapter_type,
+            "body_number": ch.body_number,
         })
     db.insert_chapters(chapter_rows)
 
@@ -153,6 +155,7 @@ async def list_chapters(project_id: str):
             title=c["title"],
             translated_title=c.get("translated_title") or "",
             chapter_type=c.get("chapter_type") or "chapter",
+            body_number=c.get("body_number"),
             status=c["status"],
             original_length=len(c.get("original_content") or ""),
             translated_length=len(c.get("translated_content") or ""),

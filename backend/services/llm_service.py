@@ -357,4 +357,42 @@ def _extract_json(text: str) -> dict | list:
                 start = None
     if last_valid:
         return last_valid
+
+    # Attempt to salvage truncated JSON by closing open braces/brackets
+    if start is not None and depth > 0:
+        fragment = text[start:]
+        # Strip trailing incomplete value (dangling comma, partial string, etc.)
+        fragment = re.sub(r',\s*"[^"]*$', '', fragment)
+        fragment = re.sub(r',\s*$', '', fragment)
+        # Count unclosed structures and close them
+        stack = []
+        in_str = False
+        esc = False
+        for c in fragment:
+            if esc:
+                esc = False
+                continue
+            if c == '\\' and in_str:
+                esc = True
+                continue
+            if c == '"':
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if c in ('{', '['):
+                stack.append('}' if c == '{' else ']')
+            elif c in ('}', ']') and stack:
+                stack.pop()
+        if in_str:
+            fragment += '"'
+        fragment += ''.join(reversed(stack))
+        try:
+            salvaged = json.loads(fragment)
+            if isinstance(salvaged, dict) and len(salvaged) > 1:
+                log.info("Salvaged truncated JSON with %d keys", len(salvaged))
+                return salvaged
+        except json.JSONDecodeError:
+            pass
+
     return {"raw": text}

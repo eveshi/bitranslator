@@ -28,11 +28,44 @@ router = APIRouter(prefix="/api", tags=["translation"])
 
 # ── LLM Settings ────────────────────────────────────────────────────────
 
+@router.get("/settings/llm")
+async def get_llm_settings():
+    """Return current LLM settings (API key masked for security)."""
+    from ..services.llm_service import _runtime
+    from ..config import settings as cfg
+    provider = _runtime.get("provider", cfg.llm_provider)
+    api_key = _runtime.get("api_key") or cfg.llm_api_key
+    base_url = _runtime.get("base_url", cfg.llm_base_url)
+    model = _runtime.get("model", cfg.llm_model)
+    translation_model = _runtime.get("translation_model") or cfg.effective_translation_model
+    temperature = _runtime.get("temperature", cfg.llm_temperature)
+
+    masked_key = ""
+    if api_key:
+        masked_key = api_key[:4] + "…" + api_key[-4:] if len(api_key) > 8 else "****"
+
+    return {
+        "provider": provider,
+        "api_key_masked": masked_key,
+        "api_key_set": bool(api_key),
+        "base_url": base_url,
+        "model": model,
+        "translation_model": translation_model or "",
+        "temperature": temperature,
+    }
+
+
 @router.post("/settings/llm")
 async def update_llm_settings(s: LLMSettings):
+    from ..services.llm_service import _runtime
+    from ..config import settings as cfg
+    # If api_key is "__KEEP__", preserve the existing key
+    api_key = s.api_key
+    if api_key == "__KEEP__":
+        api_key = _runtime.get("api_key") or cfg.llm_api_key
     llm_service.configure(
         provider=s.provider,
-        api_key=s.api_key,
+        api_key=api_key,
         base_url=s.base_url,
         model=s.model,
         translation_model=s.translation_model,
@@ -572,4 +605,122 @@ async def batch_update_titles(project_id: str, req: BatchUpdateTitlesRequest):
                 translated_title=info.translated_title,
                 chapter_type=info.chapter_type,
             )
+    # Recalculate body numbers after type changes
+    _recalc_body_numbers(project_id)
     return {"ok": True, "updated": len(req.titles)}
+
+
+def _recalc_body_numbers(project_id: str) -> None:
+    """Recalculate body_number for all chapters based on current types and titles."""
+    from ..services.epub_service import _extract_number, _CHAP_NUM_RES, _PART_NUM_RES
+    chapters = db.get_chapters(project_id)
+    if not chapters:
+        return
+
+    has_parts = any(c.get("chapter_type") == "part" for c in chapters)
+
+    # Detect mode from existing title numbers
+    last_part_idx = -1
+    detections = []
+    for i, c in enumerate(chapters):
+        if c.get("chapter_type") == "part":
+            last_part_idx = i
+        elif c.get("chapter_type") == "chapter":
+            num = _extract_number(c["title"], _CHAP_NUM_RES)
+            detections.append((i, num, last_part_idx))
+
+    mode = "continuous"
+    if has_parts and len(detections) >= 2:
+        prev_num, prev_part = None, -1
+        for _, num, pidx in detections:
+            if (num is not None and prev_num is not None
+                    and pidx > prev_part and pidx >= 0 and num <= prev_num):
+                mode = "per_part"
+                break
+            if num is not None:
+                prev_num, prev_part = num, pidx
+
+    part_num = ch_num = 0
+    for c in chapters:
+        ctype = c.get("chapter_type", "chapter")
+        if ctype == "part":
+            part_num += 1
+            detected = _extract_number(c["title"], _PART_NUM_RES)
+            bn = detected if detected is not None else part_num
+            if mode == "per_part":
+                ch_num = 0
+        elif ctype == "chapter":
+            detected = _extract_number(c["title"], _CHAP_NUM_RES)
+            if detected is not None:
+                ch_num = detected
+            else:
+                ch_num += 1
+            bn = ch_num
+        else:
+            bn = None
+        db.update_chapter(c["id"], body_number=bn)
+
+
+# ── Name map & unification ────────────────────────────────────────────
+
+@router.get("/projects/{project_id}/name-map")
+async def get_name_map(project_id: str):
+    p = db.get_project(project_id)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    raw = p.get("name_map", "")
+    try:
+        name_map = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        name_map = {}
+    return {"name_map": name_map}
+
+
+@router.post("/projects/{project_id}/rescan-names")
+async def rescan_names(project_id: str):
+    """Re-scan all translated chapters to rebuild the name map from scratch."""
+    p = db.get_project(project_id)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    name_map = translation_service.rescan_all_names(project_id)
+    return {"ok": True, "name_map": name_map, "count": len(name_map)}
+
+
+@router.post("/projects/{project_id}/unify-name")
+async def unify_name(project_id: str, body: dict = Body(...)):
+    """Find-and-replace a name variant across all translated chapters."""
+    p = db.get_project(project_id)
+    if not p:
+        raise HTTPException(404, "Project not found")
+
+    find_text = body.get("find", "").strip()
+    replace_text = body.get("replace", "").strip()
+    if not find_text or not replace_text or find_text == replace_text:
+        raise HTTPException(400, "Invalid find/replace values")
+
+    chapters = db.get_chapters(project_id)
+    total_replaced = 0
+    for ch in chapters:
+        content = ch.get("translated_content") or ""
+        if find_text not in content:
+            continue
+        count = content.count(find_text)
+        new_content = content.replace(find_text, replace_text)
+        db.update_chapter(ch["id"], translated_content=new_content)
+        total_replaced += count
+
+    # Update name_map: merge the old variant count into the new one
+    raw = p.get("name_map", "")
+    try:
+        name_map = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        name_map = {}
+
+    for orig, data in name_map.items():
+        trans = data.get("translations", {})
+        if find_text in trans:
+            old_count = trans.pop(find_text)
+            trans[replace_text] = trans.get(replace_text, 0) + old_count
+    db.update_project(project_id, name_map=json.dumps(name_map, ensure_ascii=False))
+
+    return {"ok": True, "replaced": total_replaced}

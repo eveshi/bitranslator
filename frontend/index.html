@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BiTranslator – 智能全书翻译</title>
-  <link rel="stylesheet" href="style.css?v=7" />
+  <link rel="stylesheet" href="style.css?v=16" />
 </head>
 <body>
   <div id="app">
@@ -14,6 +14,7 @@
         <div class="logo">
           <h1>BiTranslator</h1>
           <p class="tagline" data-i18n="tagline">智能全书翻译</p>
+          <p class="format-note" data-i18n="epub_only">仅支持 EPUB 格式</p>
         </div>
         <button class="btn-icon sidebar-toggle" id="btn-toggle-sidebar" title="Toggle sidebar">◀</button>
       </div>
@@ -43,7 +44,11 @@
         <label data-i18n="api_key">API Key
           <input type="password" id="llm-api-key" placeholder="AIza..." />
         </label>
-        <label data-i18n="analysis_model">分析模型
+        <div id="api-key-warning" class="api-key-warning hidden">
+          <span data-i18n="api_key_missing">⚠️ 未设置 API Key，请先输入并保存设置</span>
+        </div>
+        <div class="sidebar-field">
+          <span class="sidebar-label" data-i18n="analysis_model">分析模型</span>
           <select id="llm-model">
             <optgroup label="Gemini 2.5">
               <option value="gemini-2.5-pro" selected>Gemini 2.5 Pro</option>
@@ -55,8 +60,9 @@
             </optgroup>
           </select>
           <input type="text" id="llm-model-custom" class="hidden" placeholder="自定义模型名称" />
-        </label>
-        <label data-i18n="translation_model">翻译模型 (可选, 留空则使用分析模型)
+        </div>
+        <div class="sidebar-field">
+          <span class="sidebar-label" data-i18n="translation_model">翻译模型 (可选, 留空则使用分析模型)</span>
           <select id="llm-translation-model">
             <option value="">(与分析模型相同)</option>
             <optgroup label="Gemini 2.5">
@@ -69,7 +75,7 @@
             </optgroup>
           </select>
           <input type="text" id="llm-translation-model-custom" class="hidden" placeholder="自定义翻译模型名称" />
-        </label>
+        </div>
         <label>Temperature
           <input type="number" id="llm-temperature" value="0.3" min="0" max="2" step="0.1" />
         </label>
@@ -115,8 +121,8 @@
       <!-- Analysis panel -->
       <section id="panel-analysis" class="panel">
         <h2>📊 书籍深度分析</h2>
-        <p class="hint">AI 正在通读全书，理解上下文、角色、风格…</p>
         <div id="analysis-loading" class="loading-spinner hidden">
+          <p class="hint">AI 正在通读全书，理解上下文、角色、风格…</p>
           <div class="spinner"></div>
           <p id="analysis-loading-text">正在进行在线调研与全书分析，请稍候…</p>
         </div>
@@ -131,7 +137,7 @@
           <!-- Author & Research section -->
           <div class="card full-width research-card">
             <h3>🔍 作者与背景调研</h3>
-            <p class="research-author" id="ana-author"></p>
+            <p id="ana-author" style="font-weight:600; margin-bottom:.5rem"></p>
             <details class="research-details">
               <summary>查看完整调研报告</summary>
               <div id="ana-research" class="research-report"></div>
@@ -196,8 +202,8 @@
       <!-- Strategy panel -->
       <section id="panel-strategy" class="panel">
         <h2>📝 翻译策略</h2>
-        <p class="hint">审阅并自定义翻译策略，确保翻译符合您的期望</p>
         <div id="strategy-loading" class="loading-spinner hidden">
+          <p class="hint">审阅并自定义翻译策略，确保翻译符合您的期望</p>
           <div class="spinner"></div>
           <p>生成策略中…</p>
         </div>
@@ -219,18 +225,22 @@
             <textarea id="strat-special" rows="3"></textarea>
           </div>
           <div class="strategy-field full-width">
-            <label>角色名翻译</label>
-            <table id="strat-names-table">
-              <thead><tr><th>原文</th><th>译文</th><th>备注</th></tr></thead>
+            <label data-i18n="character_names">角色名翻译</label>
+            <p class="hint editable-hint" data-i18n="click_to_edit_names">✏️ 点击单元格可直接编辑名称和译文</p>
+            <table id="strat-names-table" class="editable-table">
+              <thead><tr><th data-i18n="original">原文</th><th data-i18n="translated">译文</th><th data-i18n="note">备注</th><th></th></tr></thead>
               <tbody id="strat-names"></tbody>
             </table>
+            <button class="btn btn-sm btn-outline" id="btn-add-name" data-i18n="add_row">+ 添加角色</button>
           </div>
           <div class="strategy-field full-width">
-            <label>术语表</label>
-            <table id="strat-glossary-table">
-              <thead><tr><th>原文</th><th>译文</th><th>上下文</th></tr></thead>
+            <label data-i18n="glossary">术语表</label>
+            <p class="hint editable-hint" data-i18n="click_to_edit_glossary">✏️ 点击单元格可直接编辑术语和译文</p>
+            <table id="strat-glossary-table" class="editable-table">
+              <thead><tr><th data-i18n="original">原文</th><th data-i18n="translated">译文</th><th data-i18n="context">上下文</th><th></th></tr></thead>
               <tbody id="strat-glossary"></tbody>
             </table>
+            <button class="btn btn-sm btn-outline" id="btn-add-glossary" data-i18n="add_glossary_row">+ 添加术语</button>
           </div>
           <div class="strategy-field full-width">
             <label>自定义指令（您的额外要求）</label>
@@ -259,8 +269,8 @@
       <!-- Sample panel -->
       <section id="panel-sample" class="panel">
         <h2>📑 样章审阅</h2>
-        <p class="hint">审阅样章的翻译效果。如不满意，可提供反馈让 AI 调整策略并重新翻译样章。</p>
         <div id="sample-loading" class="loading-spinner hidden">
+          <p class="hint">审阅样章的翻译效果。如不满意，可提供反馈让 AI 调整策略并重新翻译样章。</p>
           <div class="spinner"></div>
           <p id="sample-loading-text">翻译样章中…</p>
         </div>
@@ -285,14 +295,15 @@
             </div>
             <div class="sample-action-card highlight">
               <h3>✅ 满意！选择翻译章节</h3>
-              <p class="hint">选择要翻译的章节范围，可以先翻译几章试读，之后随时继续。</p>
+              <p class="hint">参考上方目录结构，选择要翻译的编号范围。可以先翻译几项试读，之后随时继续。</p>
+              <div id="sample-chapter-overview" class="chapter-overview-list" style="max-height:200px; margin-bottom:.75rem"></div>
               <div class="chapter-range-picker">
-                <label>从第 <input type="number" id="range-start" min="1" value="1" class="range-input" /> 章</label>
-                <label>到第 <input type="number" id="range-end" min="1" value="1" class="range-input" /> 章</label>
+                <label><span data-i18n="from_chapter">从第</span> <input type="number" id="range-start" min="1" value="1" class="range-input" /> <span data-i18n="chapter_unit">项</span></label>
+                <label><span data-i18n="to_chapter">到第</span> <input type="number" id="range-end" min="1" value="1" class="range-input" /> <span data-i18n="chapter_unit">项</span></label>
                 <span class="range-hint" id="range-hint"></span>
               </div>
               <div class="range-presets" id="range-presets"></div>
-              <button class="btn btn-primary btn-lg" id="btn-translate-all">开始翻译选中章节 →</button>
+              <button class="btn btn-primary btn-lg" id="btn-translate-all" data-i18n="start_full_translate">开始翻译选定内容 →</button>
             </div>
           </div>
         </div>
@@ -317,23 +328,21 @@
         <p class="hint" data-i18n="review_hint">点击已翻译的章节进入阅读器阅读。如果对某章不满意，可以在阅读器中重新翻译。</p>
         <div class="review-title-actions">
           <button class="btn btn-sm" id="btn-review-edit-titles" data-i18n="edit_chapter_titles">✏️ 编辑章节标题</button>
+          <button class="btn btn-sm" id="btn-toggle-name-table" data-i18n="name_table">📋 全书人名表</button>
           <span class="hint" data-i18n="edit_titles_note">可设置前言/正文/附录类型，编辑双语标题</span>
         </div>
 
         <div class="review-chapter-list" id="review-chapter-list"></div>
 
-        <div class="review-translate-more card full-width" id="review-translate-more">
-          <h3 data-i18n="translate_more">📖 继续翻译更多章节</h3>
-          <div class="chapter-range-picker">
-            <label><span data-i18n="from_chapter">从第</span> <input type="number" id="review-range-start" min="1" value="1" class="range-input" /> <span data-i18n="chapter_unit">章</span></label>
-            <label><span data-i18n="to_chapter">到第</span> <input type="number" id="review-range-end" min="1" value="1" class="range-input" /> <span data-i18n="chapter_unit">章</span></label>
-            <span class="range-hint" id="review-range-hint"></span>
-          </div>
-          <button class="btn btn-primary" id="btn-translate-more" data-i18n="start_translate">开始翻译 →</button>
-        </div>
-
         <div class="review-footer">
-          <button class="btn btn-primary btn-lg" id="btn-review-done" data-i18n="confirm_done">确认完成，前往下载 →</button>
+          <div class="review-translate-more" id="review-translate-more">
+            <span data-i18n="translate_more">📖 继续翻译</span>
+            <label><span data-i18n="from_chapter">从第</span> <input type="number" id="review-range-start" min="1" value="1" class="range-input" /> <span data-i18n="chapter_unit">项</span></label>
+            <label><span data-i18n="to_chapter">到第</span> <input type="number" id="review-range-end" min="1" value="1" class="range-input" /> <span data-i18n="chapter_unit">项</span></label>
+            <span class="range-hint" id="review-range-hint"></span>
+            <button class="btn btn-sm" id="btn-translate-more" data-i18n="start_translate">翻译 →</button>
+          </div>
+          <button class="btn btn-primary" id="btn-review-done" data-i18n="confirm_done">确认完成，前往下载 →</button>
         </div>
       </section>
 
@@ -408,6 +417,25 @@
         </div>
       </section>
 
+      <!-- Name table modal -->
+      <div id="name-table-overlay" class="modal-overlay hidden">
+        <div class="modal-content name-table-modal">
+          <div class="modal-header">
+            <h3 data-i18n="name_table">📋 全书人名表</h3>
+            <button class="btn-icon" id="btn-close-name-table">✕</button>
+          </div>
+          <p class="hint" data-i18n="name_table_hint">显示翻译过程中检测到的所有人名及其译名，可一键统一不一致的译名</p>
+          <div class="te-toolbar">
+            <button class="btn btn-outline btn-sm" id="btn-rescan-names" data-i18n="rescan_names">🔄 重新扫描全书人名</button>
+            <span class="hint" data-i18n="rescan_names_hint">重新扫描所有已翻译章节，更新人名统计</span>
+          </div>
+          <div id="name-table-content"></div>
+          <div class="btn-row" style="margin-top:1rem">
+            <button class="btn" id="btn-cancel-name-table" data-i18n="close">关闭</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Title editor modal (shared by review & reader) -->
       <div id="title-editor-overlay" class="modal-overlay hidden">
         <div class="modal-content title-editor-modal">
@@ -432,6 +460,6 @@
     </main>
   </div>
 
-  <script src="app.js?v=7"></script>
+  <script type="module" src="app.js?v=15"></script>
 </body>
 </html>

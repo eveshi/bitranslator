@@ -107,12 +107,16 @@ CRITICAL: Return ONLY a valid JSON object. No markdown formatting, no ```json```
 no explanatory text before or after the JSON. The response must start with {{ and end with }}."""
 
 
-async def _identify_book(project_name: str, first_chapter_text: str) -> dict:
+async def _identify_book(project_name: str, first_chapter_text: str,
+                         epub_author: str = "") -> dict:
     """Use LLM to identify the author and key metadata from the book."""
     excerpt = first_chapter_text[:5000]
+    hint = ""
+    if epub_author and epub_author.lower() not in ("unknown", ""):
+        hint = f"\nEPUB Metadata Author: {epub_author}\n"
     raw = await llm_service.chat(
         system_prompt=IDENTIFY_SYSTEM,
-        user_prompt=f"Book Title: {project_name}\n\nFirst Chapter Excerpt:\n{excerpt}",
+        user_prompt=f"Book Title: {project_name}\n{hint}\nFirst Chapter Excerpt:\n{excerpt}",
         max_tokens=500,
     )
     try:
@@ -120,8 +124,13 @@ async def _identify_book(project_name: str, first_chapter_text: str) -> dict:
     except json.JSONDecodeError:
         m = re.search(r"\{[\s\S]*\}", raw)
         data = json.loads(m.group(0)) if m else {}
+
+    author = data.get("author", "Unknown")
+    if (not author or author == "Unknown") and epub_author and epub_author.lower() != "unknown":
+        author = epub_author
+
     return {
-        "author": data.get("author", "Unknown"),
+        "author": author,
         "language": data.get("language", ""),
         "probable_genre": data.get("probable_genre", ""),
         "era": data.get("era", ""),
@@ -184,10 +193,22 @@ async def analyze_book(project_id: str) -> dict:
 
     db.update_project(project_id, status="analyzing")
 
+    # Read EPUB metadata author as a hint
+    epub_author = ""
+    epub_path = project.get("original_epub_path", "")
+    if epub_path:
+        try:
+            from ebooklib import epub as _epub
+            _book = _epub.read_epub(epub_path, options={"ignore_ncx": True})
+            _meta = _book.get_metadata("DC", "author")
+            epub_author = _meta[0][0] if _meta else ""
+        except Exception:
+            pass
+
     # Phase 1: Identify book & author, then do online research
     log.info("Phase 1: Identifying book and researching author for project %s", project_id)
     first_text = chapters[0]["original_content"] if chapters else ""
-    book_meta = await _identify_book(project["name"], first_text)
+    book_meta = await _identify_book(project["name"], first_text, epub_author=epub_author)
     log.info("  Identified author: %s, language: %s, genre: %s",
              book_meta["author"], book_meta["language"], book_meta["probable_genre"])
 

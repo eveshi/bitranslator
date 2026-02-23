@@ -7,7 +7,9 @@
 <a id="english"></a>
 ## English
 
-BiTranslator is an AI-driven whole-book translation tool. Unlike simple chapter-by-chapter machine translation, it mimics a professional translator's workflow: read the entire book first, understand the context, craft a translation strategy, then translate chapter by chapter — ensuring consistent terminology, coherent style, and contextual continuity throughout.
+BiTranslator is an AI-driven whole-book translation tool that works with **EPUB files**. Unlike simple chapter-by-chapter machine translation, it mimics a professional translator's workflow: read the entire book first, understand the context, craft a translation strategy, then translate chapter by chapter — ensuring consistent terminology, coherent style, and contextual continuity throughout.
+
+> **Supported format: EPUB only.** PDF, MOBI, and other formats are not supported. You can convert other formats to EPUB using tools like [Calibre](https://calibre-ebook.com/) before importing.
 
 ### Key Features
 
@@ -145,7 +147,9 @@ bitranslator/
 <a id="中文"></a>
 ## 中文
 
-BiTranslator 是一款 AI 驱动的整书翻译工具。不同于简单的逐章机器翻译，它模拟专业译者的工作流程：先通读全书、理解上下文、制定翻译策略，再逐章翻译——确保术语一致、风格连贯、上下文通顺。
+BiTranslator 是一款 AI 驱动的整书翻译工具，支持 **EPUB 格式**。不同于简单的逐章机器翻译，它模拟专业译者的工作流程：先通读全书、理解上下文、制定翻译策略，再逐章翻译——确保术语一致、风格连贯、上下文通顺。
+
+> **仅支持 EPUB 格式。** 不支持 PDF、MOBI 等其他格式。可使用 [Calibre](https://calibre-ebook.com/) 等工具将其他格式转换为 EPUB 后再导入。
 
 ### 主要功能
 

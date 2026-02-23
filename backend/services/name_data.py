@@ -1,0 +1,358 @@
+"""
+Common first names and surnames for major European languages.
+Used for character name detection in translated books.
+"""
+
+# ── English first names (male) ────────────────────────────────────────────
+_EN_MALE = {
+    "Aaron","Adam","Adrian","Aidan","Alan","Albert","Alec","Alex","Alexander",
+    "Alfred","Andrew","Andy","Anthony","Archie","Arnold","Arthur","Austin",
+    "Barry","Ben","Benedict","Benjamin","Bernard","Bill","Billy","Blake","Bobby",
+    "Brad","Bradley","Brandon","Brendan","Brett","Brian","Bruce","Bryan",
+    "Caleb","Calvin","Cameron","Carl","Carlos","Cecil","Chad","Charles","Charlie",
+    "Chris","Christian","Christopher","Clarence","Clark","Claude","Clayton",
+    "Clifford","Clint","Clinton","Clive","Cody","Colin","Connor","Conrad",
+    "Corey","Craig","Curtis","Cyril","Dale","Damian","Damon","Dan","Daniel",
+    "Danny","Darren","Darryl","Dave","David","Dean","Dennis","Derek","Dermot",
+    "Desmond","Dexter","Dick","Dominic","Don","Donald","Doug","Douglas","Drew",
+    "Duane","Duncan","Dustin","Dylan","Earl","Ed","Eddie","Edgar","Edmund",
+    "Edward","Edwin","Eli","Elijah","Elliott","Ellis","Elmer","Emery","Emil",
+    "Emmanuel","Eric","Ernest","Ernie","Ethan","Eugene","Evan","Everett",
+    "Felix","Fergus","Fernando","Finley","Fletcher","Floyd","Flynn","Francis",
+    "Frank","Franklin","Fred","Frederick","Gabriel","Gareth","Garrett","Gary",
+    "Gavin","Gene","Geoffrey","George","Gerald","Gerard","Gilbert","Glen",
+    "Glenn","Gordon","Graeme","Graham","Grant","Greg","Gregory","Guy",
+    "Hal","Hank","Harold","Harris","Harrison","Harry","Harvey","Hayden",
+    "Heath","Hector","Henry","Herbert","Herman","Howard","Hubert","Hugh","Hugo",
+    "Hunter","Ian","Isaac","Ivan","Ivor","Jack","Jackson","Jacob","Jake",
+    "James","Jamie","Jared","Jason","Jasper","Jay","Jeff","Jeffrey","Jeremy",
+    "Jerome","Jerry","Jesse","Jim","Jimmy","Joe","Joel","John","Johnny",
+    "Jon","Jonas","Jonathan","Jordan","Joseph","Josh","Joshua","Julian","Justin",
+    "Karl","Keith","Ken","Kenneth","Kent","Kevin","Kirk","Kit","Kurt","Kyle",
+    "Lance","Larry","Lars","Lawrence","Lee","Leo","Leon","Leonard","Leopold",
+    "Leslie","Lester","Lewis","Liam","Lincoln","Lloyd","Logan","Loren",
+    "Lorenzo","Louis","Luca","Lucas","Luke","Luther","Lyle","Malcolm","Marcel",
+    "Marcus","Mark","Marshall","Martin","Marvin","Mason","Matt","Matthew",
+    "Maurice","Max","Maxwell","Melvin","Michael","Mickey","Mike","Miles",
+    "Milo","Milton","Mitchell","Mohammed","Monroe","Morgan","Morris","Murray",
+    "Myles","Nathan","Nathaniel","Neal","Neil","Nelson","Nicholas","Nick",
+    "Nigel","Noah","Noel","Norman","Oliver","Omar","Oscar","Otto","Owen",
+    "Parker","Pat","Patrick","Paul","Percy","Perry","Pete","Peter","Phil",
+    "Philip","Phillip","Pierce","Preston","Quentin","Quinn","Ralph","Randall",
+    "Randolph","Randy","Ray","Raymond","Reginald","Rex","Richard","Rick",
+    "Riley","Rob","Robert","Robin","Rod","Roderick","Rodney","Roger","Roland",
+    "Roman","Ronald","Rory","Ross","Roy","Ruben","Rupert","Russell","Ryan",
+    "Sam","Samson","Samuel","Scott","Sean","Sebastian","Seth","Shane","Shaun",
+    "Shawn","Sheldon","Sidney","Simon","Solomon","Spencer","Stanley","Stefan",
+    "Stephen","Steve","Steven","Stewart","Stuart","Ted","Terence","Terry",
+    "Theo","Theodore","Thomas","Tim","Timothy","Toby","Todd","Tom","Tommy",
+    "Tony","Travis","Trevor","Tristan","Troy","Tyler","Vernon","Victor",
+    "Vincent","Virgil","Wade","Wallace","Walter","Warren","Wayne","Wendell",
+    "Wesley","Wilbur","Will","William","Willie","Wilson","Winston","Wyatt",
+    "Zachary","Zane",
+}
+
+# ── English first names (female) ──────────────────────────────────────────
+_EN_FEMALE = {
+    "Abigail","Ada","Adele","Adriana","Agnes","Aileen","Aimee","Alana","Alberta",
+    "Alexandra","Alice","Alicia","Alina","Alison","Amanda","Amber","Amelia",
+    "Amy","Andrea","Angela","Angelica","Angelina","Anita","Ann","Anna","Anne",
+    "Annette","Annie","Arabella","Ariana","Audrey","Aurora","Ava","Barbara",
+    "Beatrice","Becky","Belinda","Bella","Bernadette","Bertha","Bessie","Beth",
+    "Bethany","Betty","Beverly","Bianca","Bonnie","Brenda","Bridget","Brittany",
+    "Brooke","Camilla","Candice","Cara","Carina","Carla","Carmen","Carol",
+    "Caroline","Carolyn","Cassandra","Catherine","Cecilia","Celeste","Celia",
+    "Charlene","Charlotte","Chelsea","Cheryl","Chloe","Christina","Christine",
+    "Cindy","Claire","Clara","Claudia","Colleen","Constance","Cora","Cordelia",
+    "Cornelia","Crystal","Cynthia","Daisy","Dana","Danielle","Daphne","Darlene",
+    "Dawn","Deborah","Debra","Deirdre","Delia","Denise","Diana","Diane",
+    "Dolores","Donna","Dora","Doreen","Doris","Dorothy","Edith","Edna",
+    "Eileen","Elaine","Eleanor","Elena","Elise","Elizabeth","Ella","Ellen",
+    "Eloise","Elsie","Emily","Emma","Erica","Erin","Estelle","Esther","Ethel",
+    "Eva","Eve","Evelyn","Faith","Faye","Felicity","Fiona","Flora","Florence",
+    "Frances","Francesca","Freda","Gabriella","Gail","Gemma","Genevieve",
+    "Georgia","Geraldine","Gertrude","Gillian","Gina","Gladys","Gloria",
+    "Grace","Greta","Gwendolyn","Hailey","Hannah","Harriet","Hazel","Heather",
+    "Heidi","Helen","Helena","Henrietta","Hilda","Holly","Hope","Ida","Imogen",
+    "Ingrid","Irene","Iris","Isabel","Isabella","Isabelle","Ivy","Jacqueline",
+    "Jade","Jane","Janet","Janice","Jasmine","Jean","Jeanette","Jenna",
+    "Jennifer","Jenny","Jessica","Jill","Joan","Joanna","Jocelyn","Jodie",
+    "Josephine","Joy","Joyce","Judith","Julia","Juliana","Julie","Juliet",
+    "June","Karen","Kate","Katherine","Kathleen","Kathryn","Katie","Kay",
+    "Kayla","Kelly","Kendra","Kerry","Kim","Kimberly","Kirsten","Kristin",
+    "Lara","Laura","Lauren","Leah","Lena","Leslie","Lily","Linda","Lisa",
+    "Lois","Lola","Loretta","Lorna","Lorraine","Louise","Lucia","Lucille",
+    "Lucy","Lydia","Lynn","Mabel","Madeline","Madison","Mae","Maggie",
+    "Mandy","Margaret","Margot","Maria","Marian","Marie","Marilyn","Marina",
+    "Marjorie","Marlene","Martha","Mary","Matilda","Maureen","Maxine","May",
+    "Megan","Melanie","Melissa","Mercedes","Mia","Michelle","Mildred","Millie",
+    "Miranda","Miriam","Moira","Molly","Monica","Muriel","Myra","Myrtle",
+    "Nadine","Nancy","Naomi","Natalie","Natasha","Nellie","Nicole","Nina",
+    "Nora","Norma","Olive","Olivia","Opal","Ophelia","Paige","Pamela",
+    "Patricia","Paula","Pauline","Pearl","Penelope","Penny","Phoebe","Phyllis",
+    "Polly","Priscilla","Prudence","Rachel","Rebecca","Regina","Renee","Rhonda",
+    "Rita","Roberta","Robin","Rosa","Rosalind","Rose","Rosemary","Rosie",
+    "Roxanne","Ruby","Ruth","Sabrina","Sadie","Sally","Samantha","Sandra",
+    "Sandy","Sara","Sarah","Scarlett","Selena","Sharon","Sheila","Shelley",
+    "Shirley","Simone","Sonia","Sophia","Sophie","Stacy","Stella","Stephanie",
+    "Sue","Susan","Suzanne","Sybil","Sylvia","Tabitha","Tamara","Tanya",
+    "Tara","Teresa","Tessa","Thelma","Theresa","Tiffany","Tina","Tracy",
+    "Trudy","Ursula","Valentina","Valerie","Vanessa","Vera","Veronica",
+    "Victoria","Viola","Violet","Virginia","Vivian","Wanda","Wendy","Whitney",
+    "Wilma","Winifred","Winnie","Yvette","Yvonne","Zara","Zoe",
+}
+
+# ── German first names ────────────────────────────────────────────────────
+_DE_FIRST = {
+    "Achim","Adalbert","Adelheid","Adolf","Albrecht","Alfons","Almut","Alois",
+    "Amalie","Angelika","Anke","Anneliese","Annegret","Annemarie","Armin",
+    "Astrid","Axel","Bärbel","Bastian","Bernhard","Bettina","Birgit","Brigitte",
+    "Brunhilde","Burkhard","Christa","Christel","Christoph","Claus","Dagmar",
+    "Detlef","Dieter","Dietrich","Dirk","Dorothea","Eberhard","Eckart","Edeltraud",
+    "Egon","Elfriede","Elke","Erhard","Erika","Erwin","Falko","Florian",
+    "Frauke","Frieda","Friedrich","Fritz","Gerd","Gerhard","Gerlinde","Gertrud",
+    "Gottfried","Gregor","Gudrun","Günter","Günther","Gisela","Hannelore",
+    "Hans","Hartmut","Hedwig","Heide","Heike","Heiko","Heinz","Helga","Helmut",
+    "Hendrik","Herta","Hildegard","Holger","Horst","Hubertus","Ilse","Ingo",
+    "Ingeborg","Irmgard","Jens","Joachim","Jörg","Jürgen","Kai","Karin",
+    "Karlheinz","Klaus","Konrad","Kornelia","Lieselotte","Lothar","Luise","Lutz",
+    "Manfred","Margit","Margret","Marlies","Matthias","Meike","Monika","Norbert",
+    "Olaf","Petra","Rainer","Ralf","Reinhard","Reinhold","Renate","Rolf","Rüdiger",
+    "Sabine","Siegfried","Sieglinde","Sigrid","Silke","Stefan","Stefanie",
+    "Susanne","Sven","Thorsten","Torsten","Udo","Ulf","Ulrich","Ulrike","Ursel",
+    "Ute","Uwe","Volker","Waltraud","Werner","Wilfried","Wilhelm","Willi",
+    "Winfried","Wolfgang","Wolfram",
+}
+
+# ── French first names ────────────────────────────────────────────────────
+_FR_FIRST = {
+    "Adrien","Agnès","Aimée","Alain","Alphonse","Amaury","Ambre","Amélie",
+    "Anaïs","André","Ange","Annick","Antoine","Antoinette","Armand","Arnaud",
+    "Aurélie","Aurélien","Baptiste","Bastien","Béatrice","Benoît","Bernadette",
+    "Bernard","Bertrand","Blaise","Brigitte","Bruno","Camille","Cédric",
+    "Céline","Chantal","Christiane","Christophe","Clémence","Clément",
+    "Colette","Coralie","Corinne","Damien","Danielle","Delphine","Denis",
+    "Denise","Didier","Dominique","Edouard","Elodie","Emile","Émile","Émilie",
+    "Emmanuel","Emmanuelle","Estelle","Étienne","Eugène","Fabien","Fabienne",
+    "Fabrice","Fernand","Flavien","Flore","Florent","François","Françoise",
+    "Frédéric","Frédérique","Gaston","Geneviève","Gérard","Germain","Ghislain",
+    "Gilles","Ginette","Grégoire","Guillaume","Gustave","Guy","Hélène",
+    "Henri","Hervé","Hubert","Hugues","Inès","Isabelle","Jacques","Jean",
+    "Jeanine","Jeanne","Jocelyne","Joël","Joëlle","Josette","Josiane",
+    "Jules","Julien","Juliette","Laetitia","Laurent","Laurence","Léon",
+    "Léonie","Liliane","Loïc","Lucien","Lucienne","Lucie","Madeleine",
+    "Manon","Marc","Marcel","Marcelle","Marguerite","Marianne","Marine",
+    "Marion","Mathieu","Mathilde","Maurice","Maxime","Michel","Michèle",
+    "Micheline","Mireille","Monique","Muriel","Nadège","Nathalie","Nicolas",
+    "Noël","Noémie","Odette","Olivier","Pascal","Pascale","Patrice","Philippe",
+    "Pierre","Quentin","Raphaël","Raymond","Régis","Rémi","Renée","René",
+    "Richard","Robert","Romain","Rosalie","Sabine","Sandrine","Sébastien",
+    "Serge","Simone","Solange","Sophie","Stéphane","Stéphanie","Suzanne",
+    "Sylvain","Sylvie","Thérèse","Thibault","Thierry","Timothée","Valérie",
+    "Véronique","Victoire","Vincent","Virginie","Viviane","Xavier","Yann",
+    "Yannick","Yves","Yvette","Yvonne","Zoé",
+}
+
+# ── Spanish / Portuguese first names ──────────────────────────────────────
+_ES_PT_FIRST = {
+    "Adrián","Alejandro","Alejo","Alfonso","Alfredo","Alicia","Álvaro","Amalia",
+    "Amparo","Ana","Andrés","Ángel","Ángela","Anselmo","Antonio","Arturo",
+    "Beatriz","Benito","Blanca","Camilo","Carlota","Carmen","Carolina",
+    "Catalina","Cecilio","Celestino","Clara","Consuelo","Cristóbal","Cruz",
+    "Dolores","Domingo","Eduardo","Elena","Elvira","Emilio","Enrique",
+    "Ernesto","Esperanza","Esteban","Eugenia","Eugenio","Fabiola","Federico",
+    "Felipe","Fernando","Fidel","Francisco","Gabriela","Gonzalo","Graciela",
+    "Guadalupe","Guillermo","Gustavo","Hernán","Hugo","Ignacio","Inés",
+    "Isabel","Isidro","Jaime","Javier","Jesús","Joaquín","Jorge","José",
+    "Josefa","Juan","Juana","Julio","Leonor","Lola","Lorena","Lorenzo",
+    "Lourdes","Lucía","Luis","Luisa","Luz","Magdalena","Manuel","Marcos",
+    "Margarita","Maribel","Mario","Marta","Mateo","Matías","Mercedes",
+    "Miguel","Milagros","Montserrat","Natalia","Néstor","Nieves","Nuria",
+    "Octavio","Pablo","Paloma","Pascual","Patricio","Pedro","Pilar","Rafael",
+    "Ramiro","Ramón","Raquel","Raúl","Remedios","Ricardo","Roberto","Rocío",
+    "Rodrigo","Rosa","Rosario","Rubén","Salvador","Santiago","Santos",
+    "Sebastián","Sergio","Silvia","Socorro","Soledad","Teresa","Tomás",
+    "Trinidad","Valentín","Verónica","Vicente","Víctor","Yolanda",
+    # Portuguese additions
+    "Afonso","Beatriz","Bernardo","Catarina","Diogo","Duarte","Filipa",
+    "Filipe","Gonçalo","Guilherme","Henrique","Inês","Joana","João",
+    "Leonor","Lúcia","Luís","Madalena","Mariana","Matilde","Nuno",
+    "Raquel","Rodrigo","Rui","Salvador","Simão","Tiago","Tomé","Vasco",
+}
+
+# ── Italian first names ───────────────────────────────────────────────────
+_IT_FIRST = {
+    "Adriano","Agostino","Alberto","Aldo","Alessandra","Alessandro","Alfredo",
+    "Amedeo","Andrea","Angelo","Anna","Annalisa","Antonella","Antonio",
+    "Beatrice","Benedetto","Beppe","Bianca","Bruno","Carla","Carlo","Carmela",
+    "Cesare","Chiara","Claudio","Corrado","Cristina","Daniele","Dante",
+    "Dario","Davide","Domenico","Donato","Elena","Eleonora","Elisabetta",
+    "Emanuele","Emilio","Enrico","Enzo","Ernesto","Ettore","Eugenio",
+    "Fabio","Fabrizio","Federica","Federico","Filippo","Fiorella","Flavio",
+    "Francesca","Francesco","Franco","Gabriele","Gabriella","Gaetano",
+    "Gennaro","Giacomo","Giancarlo","Gianluca","Gianni","Gianfranco",
+    "Giorgio","Giorgia","Giovanni","Giulia","Giuliano","Giulio","Giuseppe",
+    "Giuseppina","Grazia","Guido","Ilaria","Irene","Isabella","Laura",
+    "Leonardo","Lina","Lorenzo","Luca","Lucia","Luciana","Luciano","Luigi",
+    "Luisa","Manuela","Marcello","Marco","Margherita","Maria","Mario",
+    "Massimo","Matteo","Mauro","Michele","Mirella","Monica","Nicola",
+    "Nicoletta","Ornella","Osvaldo","Paola","Paolo","Patrizia","Pietro",
+    "Raffaele","Renato","Riccardo","Rita","Roberto","Rocco","Romano",
+    "Rosa","Rosaria","Rossella","Salvatore","Sandro","Sara","Sergio",
+    "Silvana","Silvio","Simona","Simone","Stefano","Teresa","Tiziana",
+    "Tommaso","Tullio","Ugo","Umberto","Valentina","Valerio","Vincenzo",
+    "Viola","Virginia","Vittorio",
+}
+
+# ── Dutch first names ─────────────────────────────────────────────────────
+_NL_FIRST = {
+    "Anouk","Arjan","Bas","Bram","Casper","Daan","Dirk","Eline","Esther",
+    "Femke","Floris","Geert","Gerrit","Gijs","Griet","Guus","Hein","Hendrik",
+    "Henk","Ilse","Jan","Janneke","Jeroen","Joep","Joost","Kees","Koert",
+    "Liesbeth","Lotte","Luuk","Maaike","Maarten","Margriet","Mies","Niels",
+    "Piet","Pieter","Rik","Ruud","Sander","Sanne","Stijn","Thijs","Willem",
+    "Wim","Wouter",
+}
+
+# ── Scandinavian first names ──────────────────────────────────────────────
+_SCAND_FIRST = {
+    "Agnar","Aksel","Anders","Annika","Arne","Astrid","Axel","Birger","Birgit",
+    "Bjorn","Björn","Dagny","Edvard","Einar","Elin","Elsa","Erik","Frida",
+    "Greta","Gudrun","Gunnar","Gustav","Haakon","Halvor","Håkon","Harald",
+    "Helga","Henrik","Hilda","Ida","Inga","Ingeborg","Ingmar","Ingrid","Ivar",
+    "Johanna","Karin","Katarina","Kjell","Knut","Kristin","Kristina","Lars",
+    "Leif","Lena","Linnea","Magnus","Maja","Margareta","Mats","Nils","Olaf",
+    "Olav","Ola","Oskar","Per","Ragnar","Rolf","Rune","Saga","Sigrid","Sigurd",
+    "Siri","Solveig","Stig","Svea","Sven","Tilda","Tor","Tore","Torsten",
+    "Ulf",
+}
+
+# ── Russian first names (transliterated) ─────────────────────────────────
+_RU_FIRST = {
+    "Alexei","Anastasia","Andrei","Anna","Anton","Arkady","Boris","Daria",
+    "Dimitri","Dmitri","Dmitry","Ekaterina","Elena","Evgeny","Fyodor","Galina",
+    "Igor","Ilya","Irina","Ivan","Katarina","Kirill","Konstantin","Lara",
+    "Larisa","Lev","Ludmila","Lydia","Masha","Maxim","Mikhail","Nadezhda",
+    "Natalia","Natasha","Nika","Nikolai","Nina","Olga","Oleg","Pavel","Pyotr",
+    "Sergei","Sergey","Sonya","Svetlana","Tatiana","Tatyana","Vadim","Valentina",
+    "Vasily","Vera","Viktor","Vladimir","Vladislav","Yakov","Yelena","Yuri",
+    "Zhanna",
+}
+
+# ── Common European surnames ──────────────────────────────────────────────
+_SURNAMES = {
+    # English / American
+    "Abbott","Adams","Allen","Anderson","Andrews","Armstrong","Arnold","Atkins",
+    "Austin","Bailey","Baker","Baldwin","Ball","Banks","Barker","Barnes","Barrett",
+    "Barton","Bell","Bennett","Berry","Bishop","Black","Blair","Blake","Bolton",
+    "Bond","Booth","Bowen","Boyd","Bradley","Brady","Brennan","Brooks","Brown",
+    "Bruce","Bryant","Burke","Burns","Burton","Butler","Byrne","Cameron","Campbell",
+    "Carey","Carlson","Carroll","Carson","Carter","Casey","Chambers","Chapman",
+    "Chase","Clark","Clarke","Clayton","Cole","Coleman","Collins","Connor","Cook",
+    "Cooper","Cox","Craig","Crawford","Cross","Cunningham","Curtis","Dalton",
+    "Daniels","Davidson","Davies","Davis","Dawson","Dean","Dennis","Dickens",
+    "Dixon","Donovan","Douglas","Doyle","Drake","Dunn","Edwards","Elliott",
+    "Ellis","Evans","Farmer","Farrell","Ferguson","Fisher","Fitzgerald","Fleming",
+    "Fletcher","Flynn","Ford","Forster","Foster","Fowler","Fox","Fraser","Freeman",
+    "Fuller","Gallagher","Gardner","Garrett","Gibson","Gilbert","Goodman","Gordon",
+    "Graham","Grant","Gray","Green","Greene","Griffin","Griffith","Grimes","Hale",
+    "Hall","Hamilton","Hammond","Hansen","Hardy","Harper","Harris","Harrison",
+    "Hart","Harvey","Hawkins","Hayes","Henderson","Henry","Hicks","Hill","Hobbs",
+    "Hodge","Hoffman","Holden","Holland","Holmes","Hopkins","Horton","Howard",
+    "Hudson","Hughes","Hunt","Hunter","Jackson","James","Jenkins","Jensen",
+    "Johnson","Johnston","Jones","Jordan","Joyce","Kane","Keane","Kelly","Kennedy",
+    "Kent","Kerr","King","Knight","Lambert","Lane","Lawson","Lee","Lewis",
+    "Little","Lloyd","Long","Lowe","Lynch","MacDonald","Mack","Mackenzie",
+    "Malone","Manning","Marshall","Martin","Mason","Matthews","Maxwell","May",
+    "McCarthy","McCoy","McDonald","McGregor","McKay","McKenzie","McLean","Meyer",
+    "Miles","Miller","Mills","Mitchell","Montgomery","Moody","Moore","Moran",
+    "Morgan","Morris","Morrison","Morse","Mulligan","Murphy","Murray","Myers",
+    "Nash","Nelson","Newman","Newton","Nichols","Nicholson","Nolan","Norman",
+    "Norton","OBrien","OConnor","ODonnell","Oliver","ONeal","ONeill","Osborne",
+    "Owen","Owens","Page","Palmer","Parker","Parsons","Patrick","Patterson",
+    "Payne","Pearce","Pearson","Peck","Perry","Peters","Peterson","Phillips",
+    "Pierce","Porter","Potter","Powell","Power","Price","Quinn","Ramsey",
+    "Randall","Ray","Reed","Reeves","Reid","Reynolds","Rhodes","Rice",
+    "Richards","Richardson","Riley","Roberts","Robertson","Robinson","Rogers",
+    "Rose","Ross","Rowe","Russell","Ryan","Sanders","Saunders","Savage","Scott",
+    "Shaw","Sheldon","Shepherd","Sherman","Simpson","Sinclair","Slater","Smith",
+    "Spencer","Stafford","Stanley","Steele","Stephens","Stevens","Stewart",
+    "Stone","Sullivan","Sutton","Swift","Taylor","Thomas","Thompson","Thomson",
+    "Thornton","Todd","Townsend","Tucker","Turner","Tyler","Underwood","Vaughan",
+    "Wade","Wagner","Walker","Wallace","Walsh","Ward","Warren","Washington",
+    "Watkins","Watson","Watts","Webb","Webster","Wells","West","Wheeler","White",
+    "Wilkins","Williams","Willis","Wilson","Wood","Woods","Wright","Wyatt",
+    "Young",
+    # German surnames
+    "Albrecht","Bauer","Baumann","Becker","Berger","Bergmann","Böhm","Braun",
+    "Brandt","Busch","Dietrich","Engel","Ernst","Fischer","Frank","Franke",
+    "Friedrich","Fuchs","Geiger","Gerber","Groß","Gruber","Haas","Hahn",
+    "Hartmann","Herrmann","Herzog","Hoffmann","Hofmann","Horn","Huber","Jäger",
+    "Jung","Kaiser","Keller","Kern","Klein","Koch","Köhler","König","Kramer",
+    "Krause","Krüger","Kuhn","Lang","Lange","Lehmann","Lorenz","Ludwig",
+    "Maier","Maurer","Meier","Meyer","Möller","Müller","Neumann","Otto",
+    "Peters","Pfeffer","Pfeiffer","Richter","Roth","Schäfer","Schmid",
+    "Schmidt","Schmitt","Schmitz","Schneider","Scholz","Schreiber","Schröder",
+    "Schubert","Schulte","Schultz","Schulz","Schulze","Schumacher","Schwartz",
+    "Schwarz","Seidel","Sommer","Stein","Steiner","Vogel","Vogt","Wagner",
+    "Walter","Weber","Weiß","Werner","Winkler","Winter","Wolf","Wolff",
+    "Zimmermann","Ziegler",
+    # French surnames
+    "Andre","Arnaud","Aubert","Barbier","Baron","Beaulieu","Benoit","Berger",
+    "Bernard","Bertrand","Blanc","Blanchard","Bonnet","Boucher","Boulanger",
+    "Bourgeois","Boyer","Breton","Brun","Brunet","Caron","Carpentier","Chapelle",
+    "Chevalier","Clement","Colin","Collet","Cote","Deschamps","Dufour","Dumas",
+    "Dumont","Dupont","Dupuis","Durand","Duval","Fabre","Faure","Fernandez",
+    "Fontaine","Fournier","Francois","Garnier","Gauthier","Gautier","Gerard",
+    "Germain","Girard","Giraud","Guerin","Guillaume","Guillot","Henry","Hubert",
+    "Humbert","Lambert","Laurent","Lecomte","Lefevre","Legrand","Lemaire",
+    "Lemoine","Leroux","Leroy","Lucas","Maillard","Marchand","Marie","Marin",
+    "Martinez","Masson","Mathieu","Mercier","Michel","Morel","Moreau","Moulin",
+    "Noel","Olivier","Paris","Pascal","Pelletier","Perrin","Perrot","Petit",
+    "Philippe","Picard","Pierre","Poirier","Pons","Prevost","Renard","Renaud",
+    "Rey","Riviere","Robert","Roche","Roger","Rolland","Rousseau","Roux",
+    "Roy","Simon","Thomas","Vidal","Vincent",
+    # Spanish surnames
+    "Aguilar","Alonso","Alvarez","Blanco","Cabrera","Calvo","Campos","Castillo",
+    "Castro","Cortes","Cruz","Delgado","Diaz","Dominguez","Duran","Estrada",
+    "Fernandez","Flores","Fuentes","Gallego","Garcia","Gil","Gimenez","Gomez",
+    "Gonzalez","Guerrero","Gutierrez","Hernandez","Herrera","Hidalgo","Iglesias",
+    "Jimenez","Leon","Lopez","Luna","Marin","Marquez","Martinez","Medina",
+    "Mendez","Molina","Montero","Morales","Moreno","Munoz","Navarro","Nieto",
+    "Nunez","Ortega","Ortiz","Palacios","Pascual","Pastor","Perez","Prieto",
+    "Ramirez","Ramos","Reyes","Rios","Rivera","Rodriguez","Romero","Rubio",
+    "Ruiz","Sanchez","Santos","Serrano","Soto","Suarez","Torres","Vargas",
+    "Vazquez","Vega",
+    # Italian surnames
+    "Amato","Barbieri","Barone","Basile","Benedetti","Bernardi","Bianchi",
+    "Bianco","Bruno","Caputo","Carbone","Caruso","Cattaneo","Colombo","Conte",
+    "Costa","DAmico","DAngelo","DeAngelis","DeLuca","Esposito","Ferrara",
+    "Ferrari","Ferro","Fiore","Fontana","Galli","Gallo","Gentile","Giordano",
+    "Greco","Grasso","Guerra","Leone","Lombardi","Longo","Mancini","Mariani",
+    "Marchetti","Marino","Martini","Mazza","Messina","Monti","Orlando","Pagano",
+    "Palmieri","Parisi","Pellegrini","Piazza","Piras","Ricci","Rinaldi","Rizzo",
+    "Romano","Rossi","Russo","Sala","Santoro","Sartori","Serra","Silvestri",
+    "Sorrentino","Testa","Valentini","Villa","Vitale",
+}
+
+# ── Merged lookup set (all lowercased for case-insensitive matching) ──────
+_ALL_NAMES_LOWER: frozenset[str] = frozenset(
+    n.lower() for n in (
+        _EN_MALE | _EN_FEMALE | _DE_FIRST | _FR_FIRST |
+        _ES_PT_FIRST | _IT_FIRST | _NL_FIRST | _SCAND_FIRST |
+        _RU_FIRST | _SURNAMES
+    )
+)
+
+# Original-case lookup for display (maps lowercase -> original casing)
+_NAME_ORIGINAL_CASE: dict[str, str] = {}
+for _s in (_EN_MALE, _EN_FEMALE, _DE_FIRST, _FR_FIRST,
+           _ES_PT_FIRST, _IT_FIRST, _NL_FIRST, _SCAND_FIRST,
+           _RU_FIRST, _SURNAMES):
+    for _n in _s:
+        _NAME_ORIGINAL_CASE[_n.lower()] = _n
+
+
+def is_known_name(word: str) -> bool:
+    """Check if a word is a known first name or surname."""
+    return word.lower() in _ALL_NAMES_LOWER

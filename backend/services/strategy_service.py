@@ -54,26 +54,51 @@ async def generate_strategy(project_id: str) -> dict:
         custom_instructions=custom,
     )
 
+    themes = analysis.get("themes", [])
+    if isinstance(themes, str):
+        themes_str = themes
+    elif isinstance(themes, list):
+        themes_str = ", ".join(str(t) for t in themes)
+    else:
+        themes_str = str(themes)
+
     analysis_text = (
         f"Genre: {analysis.get('genre', '')}\n"
-        f"Themes: {', '.join(analysis.get('themes', []))}\n"
+        f"Themes: {themes_str}\n"
         f"Writing Style: {analysis.get('writing_style', '')}\n"
         f"Setting: {analysis.get('setting', '')}\n"
         f"Cultural Notes: {analysis.get('cultural_notes', '')}\n\n"
         f"Characters:\n"
     )
-    for ch in analysis.get("characters", []):
-        analysis_text += f"  - {ch.get('name', '?')}: {ch.get('description', '')}\n"
+    characters = analysis.get("characters", [])
+    if isinstance(characters, list):
+        for ch in characters:
+            if isinstance(ch, dict):
+                analysis_text += f"  - {ch.get('name', '?')}: {ch.get('description', '')}\n"
+            else:
+                analysis_text += f"  - {ch}\n"
+    elif isinstance(characters, str):
+        analysis_text += f"  {characters}\n"
+
     analysis_text += "\nKey Terms:\n"
-    for t in analysis.get("key_terms", []):
-        analysis_text += f"  - {t.get('term', '?')}: {t.get('explanation', '')}\n"
+    key_terms = analysis.get("key_terms", [])
+    if isinstance(key_terms, list):
+        for t in key_terms:
+            if isinstance(t, dict):
+                analysis_text += f"  - {t.get('term', '?')}: {t.get('explanation', '')}\n"
+            else:
+                analysis_text += f"  - {t}\n"
+    elif isinstance(key_terms, str):
+        analysis_text += f"  {key_terms}\n"
 
     log.info("Generating translation strategy for project %s", project_id)
-    strategy_data = await llm_service.chat_json(
+    result = await llm_service.chat_json(
         system_prompt=system_prompt,
         user_prompt=analysis_text,
-        max_tokens=4096,
+        max_tokens=8192,
+        required_keys=["overall_approach", "tone_and_style"],
     )
+    strategy_data = result if isinstance(result, dict) else {"raw": result}
     strategy_data["raw_strategy"] = str(strategy_data)
     if custom:
         strategy_data["custom_instructions"] = custom

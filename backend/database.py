@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS chapters (
     title TEXT NOT NULL DEFAULT '',
     translated_title TEXT DEFAULT '',
     chapter_type TEXT NOT NULL DEFAULT 'chapter',
+    body_number INTEGER,
     original_content TEXT NOT NULL DEFAULT '',
     translated_content TEXT,
     summary TEXT,
@@ -80,6 +81,8 @@ _MIGRATIONS = [
     "ALTER TABLE projects ADD COLUMN sample_chapter_index INTEGER DEFAULT 0",
     "ALTER TABLE chapters ADD COLUMN translated_title TEXT DEFAULT ''",
     "ALTER TABLE chapters ADD COLUMN chapter_type TEXT NOT NULL DEFAULT 'chapter'",
+    "ALTER TABLE projects ADD COLUMN name_map TEXT DEFAULT ''",
+    "ALTER TABLE chapters ADD COLUMN body_number INTEGER",
 ]
 
 
@@ -164,9 +167,11 @@ def insert_chapters(chapters: list[dict]) -> None:
     with _connect() as conn:
         conn.executemany(
             "INSERT INTO chapters (id, project_id, chapter_index, title, "
-            "original_content, status, epub_file_name) VALUES (?,?,?,?,?,?,?)",
+            "original_content, status, epub_file_name, chapter_type, body_number) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
             [(c["id"], c["project_id"], c["chapter_index"], c["title"],
-              c["original_content"], "pending", c.get("epub_file_name", ""))
+              c["original_content"], "pending", c.get("epub_file_name", ""),
+              c.get("chapter_type", "chapter"), c.get("body_number"))
              for c in chapters],
         )
 

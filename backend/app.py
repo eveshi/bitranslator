@@ -2,7 +2,11 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 from pathlib import Path
+
+# Ensure .js files have the correct MIME type for ES modules (Windows fix)
+mimetypes.add_type("application/javascript", ".js")
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
