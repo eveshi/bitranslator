@@ -544,6 +544,83 @@ def _similarity(a: str, b: str) -> float:
 _PARAGRAPH_STYLE = '<style>p { margin: 0.8em 0; }</style>'
 
 
+def build_annotations_epub(
+    chapters_data: list[dict],
+    output_path: str | Path,
+    book_title: str = "",
+) -> Path:
+    """Build an EPUB containing translator's notes for all chapters.
+
+    chapters_data: list of {"title": str, "annotations": list[dict]}
+    Each annotation dict has keys: src, tgt, note.
+    """
+    book = epub.EpubBook()
+    book.set_identifier(f"bitranslator-ann-{uuid.uuid4().hex[:8]}")
+    book.set_title(f"{book_title} - Translator's Notes" if book_title else "Translator's Notes")
+    book.set_language("zh")
+
+    style = epub.EpubItem(
+        uid="style", file_name="style/default.css", media_type="text/css",
+        content=(_DEFAULT_CSS + _ANNOTATIONS_CSS).encode("utf-8"),
+    )
+    book.add_item(style)
+
+    spine = []
+    toc = []
+
+    for i, cd in enumerate(chapters_data):
+        title = cd["title"]
+        annotations = cd.get("annotations", [])
+        if not annotations:
+            continue
+
+        html = f"<h1>{_esc(title)}</h1>\n"
+        for j, a in enumerate(annotations):
+            html += (
+                f'<div class="ann-entry">'
+                f'<p class="ann-num">{j + 1}.</p>'
+                f'<p class="ann-src"><b>Original:</b> {_esc(a.get("src", ""))}</p>'
+                f'<p class="ann-tgt"><b>Translation:</b> {_esc(a.get("tgt", ""))}</p>'
+                f'<p class="ann-note">{_esc(a.get("note", ""))}</p>'
+                f'</div>\n'
+            )
+
+        fname = f"ann_{i:04d}.xhtml"
+        ch_item = epub.EpubHtml(title=title, file_name=fname, lang="zh")
+        ch_item.content = (
+            f'<html><head><title>{_esc(title)}</title>'
+            f'<link rel="stylesheet" href="style/default.css"/></head>'
+            f'<body>{html}</body></html>'
+        )
+        ch_item.add_item(style)
+        book.add_item(ch_item)
+        spine.append(ch_item)
+        toc.append(epub.Link(fname, title, f"ann_{i}"))
+
+    if not spine:
+        return None
+
+    book.spine = spine
+    book.toc = toc
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    epub.write_epub(str(output_path), book)
+    log.info("Built annotations EPUB: %s", output_path)
+    return output_path
+
+
+_ANNOTATIONS_CSS = """
+.ann-entry { margin: 1em 0; padding: 0.8em; border-left: 3px solid #4a7dff; background: #f8f9fa; }
+.ann-num { font-weight: bold; color: #4a7dff; margin: 0; }
+.ann-src { font-style: italic; color: #666; margin: 0.3em 0; }
+.ann-tgt { margin: 0.3em 0; }
+.ann-note { margin: 0.3em 0; line-height: 1.6; }
+"""
+
+
 def _replace_body_text(original_html: str, translated_text: str,
                        bilingual_title: str = "") -> str:
     """Replace the body content of an HTML document with translated text,

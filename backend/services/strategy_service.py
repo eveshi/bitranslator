@@ -105,7 +105,7 @@ async def generate_strategy(project_id: str) -> dict:
 
     # Preserve user-set annotation flags across regeneration
     if existing_strategy:
-        for key in ("annotate_terms", "annotate_names"):
+        for key in ("annotate_terms", "annotate_names", "free_translation", "enable_annotations"):
             if key in existing_strategy and key not in strategy_data:
                 strategy_data[key] = existing_strategy[key]
 

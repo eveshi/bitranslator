@@ -16,6 +16,49 @@ export function chapterDisplayLabel(ch) {
   return trans && trans !== orig ? `${prefix}${trans} / ${orig}` : `${prefix}${orig}`;
 }
 
+let _currentAnnotations = [];
+
+function _renderAnnotationsModal(annotations) {
+  const list = $("#annotations-modal-list");
+  if (!annotations || annotations.length === 0) {
+    list.innerHTML = `<p class="hint">${t("no_annotations")}</p>`;
+    return;
+  }
+  let html = '<table class="annotations-table"><thead><tr>' +
+    `<th>#</th><th>${t("annotation_src")}</th><th>${t("annotation_tgt")}</th><th>${t("annotation_note")}</th>` +
+    '</tr></thead><tbody>';
+  annotations.forEach((a, i) => {
+    html += `<tr data-ann-idx="${i}">` +
+      `<td>${i + 1}</td>` +
+      `<td class="ann-src">${esc(a.src || "")}</td>` +
+      `<td class="ann-tgt">${esc(a.tgt || "")}</td>` +
+      `<td class="ann-note">${esc(a.note || "")}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  list.innerHTML = html;
+}
+
+function _showAnnotationTooltip(ann) {
+  const tooltip = $("#reader-ann-tooltip");
+  $("#ann-tooltip-src-text").textContent = ann.src || "";
+  $("#ann-tooltip-tgt-text").textContent = ann.tgt || "";
+  $("#ann-tooltip-note-text").textContent = ann.note || "";
+  show(tooltip);
+}
+
+function _highlightAnnotatedText(transEl, annotations) {
+  if (!annotations || annotations.length === 0) return;
+  let html = transEl.innerHTML;
+  for (let i = 0; i < annotations.length; i++) {
+    const tgt = annotations[i].tgt;
+    if (!tgt || tgt.length < 2) continue;
+    const escaped = tgt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escaped})`, "g");
+    html = html.replace(regex, `<mark class="ann-highlight" data-ann-idx="${i}">$1</mark>`);
+  }
+  transEl.innerHTML = html;
+}
+
 export async function loadReaderChapter(idx) {
   const ch = state.readerChapters[idx];
   if (!ch) return;
@@ -30,17 +73,26 @@ export async function loadReaderChapter(idx) {
   transEl.innerHTML = "<p style='color:var(--text-dim)'>...</p>";
 
   try {
-    const [orig, trans] = await Promise.all([
+    const [orig, trans, annResp] = await Promise.all([
       apiJson(`/api/projects/${state.currentProjectId}/chapters/${ch.id}/original`),
       apiJson(`/api/projects/${state.currentProjectId}/chapters/${ch.id}/translation`),
+      apiJson(`/api/projects/${state.currentProjectId}/chapters/${ch.id}/annotations`).catch(() => ({ annotations: [] })),
     ]);
     origEl.innerHTML = textToHtml(orig.text || "", ch.title);
     transEl.innerHTML = ch.status === "translated"
       ? textToHtml(trans.text || "", ch.translated_title || ch.title)
       : `<p style='color:var(--text-dim)'>(${t("not_translated_yet")})</p>`;
+
+    _currentAnnotations = annResp.annotations || [];
+    hide($("#reader-ann-tooltip"));
+
+    if ($("#reader-show-annotations").checked && _currentAnnotations.length > 0) {
+      _highlightAnnotatedText(transEl, _currentAnnotations);
+    }
   } catch (e) {
     console.error("loadReaderChapter failed", e);
     origEl.innerHTML = "<p>加载失败</p>"; transEl.innerHTML = "<p>加载失败</p>";
+    _currentAnnotations = [];
   }
   clearQASelection();
 }
@@ -110,6 +162,44 @@ export function initReader() {
     const view = $("#reader-book-view"), origPane = $("#reader-book-original");
     if (on) { view.classList.remove("single-pane"); origPane.style.display = ""; }
     else { view.classList.add("single-pane"); origPane.style.display = "none"; }
+  });
+
+  // Show annotations toggle — highlights in translation text
+  $("#reader-show-annotations").addEventListener("change", () => {
+    const on = $("#reader-show-annotations").checked;
+    const transEl = $("#reader-book-translated-content");
+    if (on && _currentAnnotations.length > 0) {
+      _highlightAnnotatedText(transEl, _currentAnnotations);
+    } else {
+      transEl.querySelectorAll("mark.ann-highlight").forEach(m => {
+        m.replaceWith(document.createTextNode(m.textContent));
+      });
+      hide($("#reader-ann-tooltip"));
+    }
+  });
+
+  // Click a highlight → show single annotation tooltip at bottom of reader
+  $("#reader-book-translated-content").addEventListener("click", (e) => {
+    const mark = e.target.closest("mark.ann-highlight");
+    if (!mark) return;
+    const idx = parseInt(mark.dataset.annIdx, 10);
+    const ann = _currentAnnotations[idx];
+    if (ann) _showAnnotationTooltip(ann);
+  });
+
+  // Close tooltip
+  $("#btn-close-ann-tooltip").addEventListener("click", () => hide($("#reader-ann-tooltip")));
+
+  // View all annotations — open modal
+  $("#btn-view-all-annotations").addEventListener("click", () => {
+    _renderAnnotationsModal(_currentAnnotations);
+    show($("#annotations-overlay"));
+  });
+
+  // Close annotations modal
+  $("#btn-close-annotations-modal").addEventListener("click", () => hide($("#annotations-overlay")));
+  $("#annotations-overlay").addEventListener("click", (e) => {
+    if (e.target === $("#annotations-overlay")) hide($("#annotations-overlay"));
   });
 
   // Text selection for Q&A

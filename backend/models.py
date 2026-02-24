@@ -108,6 +108,8 @@ class StrategyOut(BaseModel):
     custom_instructions: str = ""
     annotate_terms: bool = False
     annotate_names: bool = False
+    free_translation: bool = False
+    enable_annotations: bool = False
     raw_strategy: str = ""
 
 
@@ -121,6 +123,8 @@ class StrategyUpdate(BaseModel):
     custom_instructions: Optional[str] = None
     annotate_terms: Optional[bool] = None
     annotate_names: Optional[bool] = None
+    free_translation: Optional[bool] = None
+    enable_annotations: Optional[bool] = None
 
 
 class TranslationProgress(BaseModel):

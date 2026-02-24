@@ -360,6 +360,21 @@ async def download_epub(project_id: str):
     )
 
 
+@router.get("/projects/{project_id}/download-annotations")
+async def download_annotations_epub(project_id: str):
+    p = db.get_project(project_id)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    result = translation_service.build_annotations_book(project_id)
+    if not result:
+        raise HTTPException(400, "No annotations available")
+    return FileResponse(
+        path=str(result),
+        media_type="application/epub+zip",
+        filename=result.name,
+    )
+
+
 # ── AI Q&A about translation ───────────────────────────────────────────
 
 _QA_SYSTEM = """\

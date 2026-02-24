@@ -16,6 +16,8 @@ BiTranslator is an AI-driven whole-book translation tool that works with **EPUB 
 - **Deep Analysis** – AI reads the book and performs online research to identify genre, themes, characters, writing style, cultural context, etc.
 - **Translation Strategy** – Automatically generates a translation strategy (glossary, character names, tone & style guidelines) with user feedback loops
 - **User Control** – Edit the strategy, modify the glossary, specify character name translations, set the desired tone. Provide corrections at every step.
+- **Translation Style Preference** – Choose between faithful translation or free translation that prioritizes readability for complex sentences
+- **Translator's Annotations** – AI generates explanatory notes for difficult sentences, idioms, and cultural references alongside translation; viewable inline or in a dedicated panel; exportable as a standalone EPUB
 - **Sample Review** – Translates a sample chapter for preview; refine the strategy based on your feedback before full translation
 - **Chapter Range Selection** – Choose which chapters to translate (e.g., chapters 3–10); save strategy and continue later
 - **Context Continuity** – Carries forward summaries of previous chapters during translation to maintain consistency
@@ -58,6 +60,16 @@ Upload EPUB → Deep Analysis (with online research) → Generate Strategy → E
 **Built-in Reader** – Side-by-side reading with AI Q&A assistant for translation questions:
 
 ![Reader](images/reader.png)
+
+**Translator's Annotations** – Annotated sentences highlighted in translation; click to view the note inline:
+
+![Annotation Highlight](images/annotation_highlight.png)
+
+![Annotation Inline Panel](images/annotation_inline_panel.png)
+
+**All Annotations Panel** – View all translator's notes for the current chapter at once:
+
+![Annotation Panel](images/annotation_panel.png)
 
 **Download** – Chapter-by-chapter downloads or combine into a complete translated EPUB:
 
@@ -157,6 +169,8 @@ BiTranslator 是一款 AI 驱动的整书翻译工具，支持 **EPUB 格式**�
 - **深度分析** – AI 阅读书籍并进行在线调研，识别体裁、主题、角色、写作风格、文化背景等
 - **翻译策略** – 自动生成翻译策略（术语表、角色名称、语气风格指南），支持用户反馈迭代
 - **用户控制** – 可编辑策略、修改术语表、指定角色名翻译、设定语气。每个步骤都可以提供修正意见
+- **翻译风格偏好** – 可选择忠实原文翻译或优先可读性的意译模式，针对长难句自动拆分重组
+- **翻译附注** – AI 翻译时同步生成长难句、惯用语、文化背景的意译分析注释；可在阅读器内高亮查看或弹窗浏览全部附注；支持导出为独立 EPUB
 - **样章审阅** – 翻译样章供预览；根据反馈调整策略后可重新翻译
 - **章节范围选择** – 选择翻译特定章节（如第3-10章）；保存策略后可随时继续
 - **上下文连贯** – 翻译时携带前面章节的摘要，保持情节和术语一致性
@@ -199,6 +213,16 @@ BiTranslator 是一款 AI 驱动的整书翻译工具，支持 **EPUB 格式**�
 **内置阅读器** – 原文/译文对照阅读，AI 翻译助手随时解答翻译疑问：
 
 ![阅读器](images/reader.png)
+
+**翻译附注** – 有注释的译文句子高亮显示，点击即可查看该句注释：
+
+![附注高亮](images/annotation_highlight.png)
+
+![附注内联面板](images/annotation_inline_panel.png)
+
+**全部附注面板** – 一次查看当前章节的所有翻译注释：
+
+![附注面板](images/annotation_panel.png)
 
 **下载** – 逐章下载或合并为完整译本 EPUB：
 
@@ -305,6 +329,17 @@ bitranslator/
 
 <a id="changelog"></a>
 ## 更新日志 / Changelog
+
+#### 2026-02-24
+
+| 类型 | 内容 |
+|------|------|
+| feat | **Translator's annotations**: AI generates explanatory notes for difficult sentences, idioms, and cultural references alongside each translation chunk / **翻译附注**：AI 在翻译时同步生成长难句、惯用语、文化背景的意译分析注释 |
+| feat | **Inline annotation highlights**: toggle "Show Annotations" to highlight annotated sentences in the translation; click to view the note in a tooltip at the bottom / **内联附注高亮**：勾选"显示附注"可在译文中高亮有注释的句子，点击后在底部显示该句注释 |
+| feat | **All annotations panel**: click "View All Notes" to open a modal showing all annotations for the current chapter / **全部附注面板**：点击"查看所有附注"弹窗显示当前章节的全部注释 |
+| feat | **Annotations EPUB export**: download all translator's notes as a standalone EPUB / **附注 EPUB 导出**：可将全部翻译注释下载为独立 EPUB |
+| feat | **Free-translation preference**: new strategy option to prioritize readability — restructure long/complex sentences for clarity / **意译偏好选项**：新增翻译策略选项，优先可读性，长难句自动拆分重组 |
+| fix | Fix annotation tooltip text color invisible in dark theme / 修复暗色主题下附注提示框文字不可见的问题 |
 
 #### 2025-02-22
 

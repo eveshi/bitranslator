@@ -1,6 +1,7 @@
 """API routes for book/project management."""
 from __future__ import annotations
 
+import json
 import shutil
 import uuid
 from datetime import datetime, timezone
@@ -178,3 +179,15 @@ async def get_chapter_translation(project_id: str, chapter_id: str):
     if not ch or ch["project_id"] != project_id:
         raise HTTPException(404, "Chapter not found")
     return {"text": ch.get("translated_content") or ""}
+
+
+@router.get("/{project_id}/chapters/{chapter_id}/annotations")
+async def get_chapter_annotations(project_id: str, chapter_id: str):
+    ch = db.get_chapter(chapter_id)
+    if not ch or ch["project_id"] != project_id:
+        raise HTTPException(404, "Chapter not found")
+    raw = ch.get("annotations") or "[]"
+    try:
+        return {"annotations": json.loads(raw)}
+    except (json.JSONDecodeError, TypeError):
+        return {"annotations": []}

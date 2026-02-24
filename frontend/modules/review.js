@@ -233,6 +233,13 @@ export function initReview() {
     finally { $("#btn-combine-download").textContent = t("combine_download"); $("#btn-combine-download").disabled = false; }
   });
 
+  // Download annotations EPUB
+  $("#btn-download-annotations").addEventListener("click", async () => {
+    try {
+      window.open(`/api/projects/${state.currentProjectId}/download-annotations`, "_blank");
+    } catch (e) { alert(t("save_failed") + ": " + e.message); }
+  });
+
   // Resume translation
   $("#btn-resume-translate").addEventListener("click", async () => {
     showPanel("translate");

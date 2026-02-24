@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BiTranslator – 智能全书翻译</title>
-  <link rel="stylesheet" href="style.css?v=18" />
+  <link rel="stylesheet" href="style.css?v=19" />
 </head>
 <body>
   <div id="app">
@@ -241,6 +241,23 @@
             <p class="hint" data-i18n="annotate_hint">例：默里（Murray）和汤普森（Thompson）走进房间，侍者汉斯递上了菜单。← 汉斯为一次性角色，不标注。日内瓦、霍格沃茨等有公认译名的地名不标注。</p>
           </div>
 
+          <div class="strategy-field full-width annotation-options">
+            <label data-i18n="translation_style_options">翻译风格选项</label>
+            <div class="checkbox-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="strat-free-translation">
+                <span data-i18n="free_translation">长难句优先意译：遇到复杂长句时优先拆分、重组以保证可读性，而非保持原句结构</span>
+              </label>
+            </div>
+            <div class="checkbox-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="strat-enable-annotations">
+                <span data-i18n="enable_annotations">生成翻译附注：AI 在翻译时额外生成长难句/文化背景的意译分析注释，可在阅读器中查看</span>
+              </label>
+            </div>
+            <p class="hint" data-i18n="annotations_hint">附注会解释翻译选择、原文直译含义和文化背景，方便深度阅读对比。可在阅读器中切换显示，也可导出为 EPUB。</p>
+          </div>
+
           <div class="strategy-field full-width">
             <label data-i18n="character_names">角色名翻译</label>
             <p class="hint editable-hint" data-i18n="click_to_edit_names">✏️ 点击单元格可直接编辑名称和译文</p>
@@ -378,6 +395,11 @@
               <input type="checkbox" id="reader-show-original" checked />
               <span data-i18n="show_original">显示原文</span>
             </label>
+            <label class="reader-toggle">
+              <input type="checkbox" id="reader-show-annotations" />
+              <span data-i18n="show_annotations">显示附注</span>
+            </label>
+            <button class="btn btn-sm" id="btn-view-all-annotations" data-i18n="view_all_annotations">📝 查看所有附注</button>
             <button class="btn btn-sm" id="btn-quick-translate-titles" data-i18n="ai_translate_titles_short">🤖 翻译标题</button>
             <button class="btn btn-sm" id="btn-edit-titles" data-i18n="edit_chapter_titles">✏️ 编辑章节标题</button>
           </div>
@@ -391,6 +413,27 @@
           <div class="reader-book-pane" id="reader-book-translated">
             <div class="reader-book-header">译文</div>
             <div class="reader-book-content" id="reader-book-translated-content"></div>
+          </div>
+        </div>
+
+        <!-- Single annotation tooltip (shown when clicking a highlight) -->
+        <div id="reader-ann-tooltip" class="reader-ann-tooltip hidden">
+          <button class="btn-icon ann-tooltip-close" id="btn-close-ann-tooltip">✕</button>
+          <div class="ann-tooltip-body">
+            <p class="ann-tooltip-src"><span class="ann-label" data-i18n="annotation_src">原文</span>: <span id="ann-tooltip-src-text"></span></p>
+            <p class="ann-tooltip-tgt"><span class="ann-label" data-i18n="annotation_tgt">译文</span>: <span id="ann-tooltip-tgt-text"></span></p>
+            <p class="ann-tooltip-note" id="ann-tooltip-note-text"></p>
+          </div>
+        </div>
+
+        <!-- All annotations modal overlay -->
+        <div id="annotations-overlay" class="modal-overlay hidden">
+          <div class="modal-content annotations-modal">
+            <div class="modal-header">
+              <h3 data-i18n="annotations_panel">📝 翻译附注</h3>
+              <button class="btn-icon" id="btn-close-annotations-modal">✕</button>
+            </div>
+            <div id="annotations-modal-list" class="annotations-modal-list"></div>
           </div>
         </div>
 
@@ -423,6 +466,7 @@
 
         <div class="done-actions">
           <button class="btn btn-primary btn-lg" id="btn-combine-download" data-i18n="combine_download">合并为完整 EPUB 并下载</button>
+          <button class="btn" id="btn-download-annotations" data-i18n="download_annotations_epub">📥 下载附注 EPUB</button>
           <button class="btn" id="btn-back-to-review" data-i18n="back_to_review">← 返回审阅</button>
           <button class="btn" id="btn-resume-translate" style="display:none" data-i18n="continue_translate">继续翻译剩余章节</button>
           <button class="btn" id="btn-new-project" data-i18n="new_book">翻译新书</button>
@@ -478,6 +522,6 @@
     </main>
   </div>
 
-  <script type="module" src="app.js?v=16"></script>
+  <script type="module" src="app.js?v=17"></script>
 </body>
 </html>

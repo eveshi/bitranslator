@@ -1450,6 +1450,84 @@ td input:focus { outline: none; }
   margin-top: 2px;
 }
 
+/* ── Annotations ─────────────────────────────────────────────────────── */
+mark.ann-highlight {
+  background: rgba(255, 220, 100, 0.35);
+  border-bottom: 2px dotted var(--primary, #4a7dff);
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+mark.ann-highlight:hover {
+  background: rgba(255, 200, 50, 0.55);
+}
+
+/* ── Annotation tooltip (single note at bottom of reader) ────────────── */
+.reader-ann-tooltip {
+  position: sticky;
+  bottom: 0;
+  left: 0; right: 0;
+  z-index: 20;
+  background: var(--bg-card);
+  color: var(--text);
+  border-top: 2px solid var(--primary, #4a7dff);
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.25);
+  padding: 12px 16px;
+  animation: ann-tooltip-slide-up 0.2s ease;
+}
+@keyframes ann-tooltip-slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.ann-tooltip-close {
+  position: absolute;
+  top: 8px; right: 8px;
+  font-size: 1rem;
+}
+.ann-tooltip-body { padding-right: 24px; }
+.ann-tooltip-src, .ann-tooltip-tgt { margin: 2px 0; font-size: 0.9rem; color: var(--text); }
+.ann-tooltip-src { color: var(--text-dim); font-style: italic; }
+.ann-label { font-weight: 600; color: var(--primary, #4a7dff); }
+.ann-tooltip-note { margin: 6px 0 0; line-height: 1.6; font-size: 0.95rem; color: var(--text); }
+
+/* ── Annotations modal (all notes for chapter) ──────────────────────── */
+.annotations-modal {
+  max-width: 800px;
+  width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.annotations-modal-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 0 4px;
+}
+.annotations-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.annotations-table th {
+  text-align: left;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-bottom: 2px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.annotations-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.annotations-table td:first-child { width: 30px; text-align: center; color: var(--text-dim); }
+.ann-src { color: var(--text-dim); font-style: italic; max-width: 180px; }
+.ann-tgt { max-width: 180px; }
+.ann-note { line-height: 1.5; }
+
 .hidden { display: none !important; }
 
 /* ── Responsive ─────────────────────────────────────────────────────── */

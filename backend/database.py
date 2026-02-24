@@ -85,6 +85,9 @@ _MIGRATIONS = [
     "ALTER TABLE chapters ADD COLUMN body_number INTEGER",
     "ALTER TABLE strategies ADD COLUMN annotate_terms INTEGER DEFAULT 0",
     "ALTER TABLE strategies ADD COLUMN annotate_names INTEGER DEFAULT 0",
+    "ALTER TABLE strategies ADD COLUMN free_translation INTEGER DEFAULT 0",
+    "ALTER TABLE strategies ADD COLUMN enable_annotations INTEGER DEFAULT 0",
+    "ALTER TABLE chapters ADD COLUMN annotations TEXT DEFAULT ''",
 ]
 
 
@@ -246,8 +249,8 @@ def save_strategy(project_id: str, data: dict) -> None:
             "INSERT OR REPLACE INTO strategies "
             "(project_id, overall_approach, tone_and_style, character_names, glossary, "
             "cultural_adaptation, special_considerations, custom_instructions, raw_strategy, "
-            "annotate_terms, annotate_names) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "annotate_terms, annotate_names, free_translation, enable_annotations) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 project_id,
                 data.get("overall_approach", ""),
@@ -260,6 +263,8 @@ def save_strategy(project_id: str, data: dict) -> None:
                 data.get("raw_strategy", ""),
                 1 if data.get("annotate_terms") else 0,
                 1 if data.get("annotate_names") else 0,
+                1 if data.get("free_translation") else 0,
+                1 if data.get("enable_annotations") else 0,
             ),
         )
 
@@ -274,6 +279,8 @@ def get_strategy(project_id: str) -> dict | None:
         d[key] = _json_loads(d.get(key))
     d["annotate_terms"] = bool(d.get("annotate_terms", 0))
     d["annotate_names"] = bool(d.get("annotate_names", 0))
+    d["free_translation"] = bool(d.get("free_translation", 0))
+    d["enable_annotations"] = bool(d.get("enable_annotations", 0))
     return d
 
 

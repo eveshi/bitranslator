@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 # Cancellation flags keyed by project_id
 _cancel_flags: dict[str, bool] = {}
 
-TRANSLATION_SYSTEM = """\
+_TRANSLATION_SYSTEM_BASE = """\
 You are a professional book translator translating from {source_lang} to {target_lang}. \
 Follow the translation strategy and glossary strictly to ensure consistency across the entire book.
 
@@ -34,8 +34,25 @@ Follow the translation strategy and glossary strictly to ensure consistency acro
 • Maintain the author's narrative voice, tone, and style as described in the strategy.
 • Use the glossary for all listed terms to ensure consistency.
 • Preserve paragraph structure. Every paragraph in the source must appear in the translation.
-• Output ONLY the translated text, no commentary, translator notes, or explanations.
-• Do NOT stop early. Translate every single sentence until the end of the provided text."""
+• Do NOT stop early. Translate every single sentence until the end of the provided text.
+{output_rules}"""
+
+_OUTPUT_RULES_PLAIN = \
+    "• Output ONLY the translated text, no commentary, translator notes, or explanations."
+
+_OUTPUT_RULES_ANNOTATED = """\
+• Output the complete translated text first.
+• AFTER the COMPLETE translation, output a line containing EXACTLY: ===ANNOTATIONS===
+• Then output a JSON array of translator's notes for difficult/nuanced passages.
+  Each element: {{"src": "<short original excerpt ≤30 chars>", \
+"tgt": "<corresponding translated excerpt ≤30 chars>", \
+"note": "<explanation: why you translated it this way, literal meaning, \
+cultural context, alternative readings, etc.>"}}
+• Only annotate passages that are: long/complex sentences, idioms, culturally specific \
+references, ambiguous phrases, or where the translation departs significantly from the \
+literal meaning. Aim for 3-8 notes per text chunk — NOT every sentence.
+• The full translation MUST appear BEFORE the ===ANNOTATIONS=== line.
+• If nothing warrants annotation, output ===ANNOTATIONS=== followed by []."""
 
 TRANSLATION_USER = """\
 {context_section}\
@@ -59,6 +76,29 @@ And here is the portion of the original text that still needs to be translated:
 {remaining}
 
 Continue the translation from where it stopped. Output ONLY the translated continuation."""
+
+
+_ANNOTATION_SEPARATOR = "===ANNOTATIONS==="
+
+
+def _build_system_prompt(project: dict, strategy: dict) -> str:
+    enable_ann = strategy.get("enable_annotations", False)
+    return _TRANSLATION_SYSTEM_BASE.format(
+        source_lang=project["source_language"],
+        target_lang=project["target_language"],
+        strategy_text=_build_strategy_text(strategy),
+        glossary_text=_build_glossary_text(strategy),
+        output_rules=_OUTPUT_RULES_ANNOTATED if enable_ann else _OUTPUT_RULES_PLAIN,
+    )
+
+
+def _split_translation_and_annotations(text: str) -> tuple[str, str]:
+    """Split AI response into (translation, annotations_json).
+    If no separator found, returns (text, '')."""
+    if _ANNOTATION_SEPARATOR in text:
+        parts = text.split(_ANNOTATION_SEPARATOR, 1)
+        return parts[0].strip(), parts[1].strip()
+    return text.strip(), ""
 
 
 def _extract_translated_title(translated_text: str, original_title: str) -> str:
@@ -146,6 +186,21 @@ def _build_strategy_text(strategy: dict) -> str:
     if annotations:
         parts.append("\n── Annotation Rules ──")
         parts.extend(annotations)
+
+    # Free-translation preference
+    if strategy.get("free_translation"):
+        parts.append(
+            "\n── Translation Style Preference ──\n"
+            "The reader prefers READABILITY over literal faithfulness. "
+            "For long, complex, or multi-clause sentences: restructure them "
+            "into shorter, clearer sentences in the target language rather than "
+            "preserving the original sentence structure. "
+            "Prioritize natural, easy-to-understand expression. "
+            "It is acceptable to split one long sentence into two or three, "
+            "reorder clauses, or paraphrase — as long as the meaning and tone "
+            "are preserved. Avoid awkward literal translations that require the "
+            "reader to re-read to understand."
+        )
 
     return "\n".join(parts)
 
@@ -296,12 +351,8 @@ async def translate_chapter(
 
     db.update_chapter(chapter_id, status="translating")
 
-    system_prompt = TRANSLATION_SYSTEM.format(
-        source_lang=project["source_language"],
-        target_lang=project["target_language"],
-        strategy_text=_build_strategy_text(strategy),
-        glossary_text=_build_glossary_text(strategy),
-    )
+    system_prompt = _build_system_prompt(project, strategy)
+    enable_ann = strategy.get("enable_annotations", False)
 
     context_section = _build_context_section(all_chapters, chapter["chapter_index"])
 
@@ -320,8 +371,8 @@ async def translate_chapter(
     _set_chunk_progress(project_id, ch_idx, ch_title, 0, len(chunks))
 
     translated_parts = []
+    all_annotations = []
     for i, chunk in enumerate(chunks):
-        # Check cancellation between chunks so stop takes effect mid-chapter
         if _is_cancelled(project_id):
             if translated_parts:
                 partial = "\n\n".join(translated_parts)
@@ -338,24 +389,36 @@ async def translate_chapter(
             chapter_text=chunk,
         )
 
-        translated = await _translate_chunk_with_continuation(
+        raw_result = await _translate_chunk_with_continuation(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             source_text=chunk,
             project=project,
         )
-        translated_parts.append(translated)
 
-        # Save progress incrementally so we don't lose work
+        if enable_ann:
+            trans_text, ann_json = _split_translation_and_annotations(raw_result)
+            translated_parts.append(trans_text)
+            if ann_json:
+                try:
+                    parsed = json.loads(ann_json)
+                    if isinstance(parsed, list):
+                        all_annotations.extend(parsed)
+                except json.JSONDecodeError:
+                    log.warning("Failed to parse annotations JSON for chunk %d", i)
+        else:
+            translated_parts.append(raw_result)
+
         partial = "\n\n".join(translated_parts)
         db.update_chapter(chapter_id, translated_content=partial)
         _set_chunk_progress(project_id, ch_idx, ch_title, i + 1, len(chunks))
 
     full_translation = "\n\n".join(translated_parts)
 
+    annotations_str = json.dumps(all_annotations, ensure_ascii=False) if all_annotations else ""
     translated_title = _extract_translated_title(full_translation, chapter["title"])
     db.update_chapter(chapter_id, translated_content=full_translation, status="translated",
-                      translated_title=translated_title)
+                      translated_title=translated_title, annotations=annotations_str)
 
     display_title = _bilingual_title(chapter["title"], translated_title)
     epub_path = _chapter_epub_path(project, chapter)
@@ -415,12 +478,8 @@ async def translate_sample(project_id: str, chapter_index: int | None = None) ->
         log.info("Sample: using first ~%d words of chapter %d (%d total words)",
                  settings.sample_max_words, idx + 1, len(original_text.split()))
 
-    system_prompt = TRANSLATION_SYSTEM.format(
-        source_lang=project["source_language"],
-        target_lang=project["target_language"],
-        strategy_text=_build_strategy_text(strategy),
-        glossary_text=_build_glossary_text(strategy),
-    )
+    system_prompt = _build_system_prompt(project, strategy)
+    enable_ann = strategy.get("enable_annotations", False)
 
     user_prompt = TRANSLATION_USER.format(
         context_section="",
@@ -428,12 +487,26 @@ async def translate_sample(project_id: str, chapter_index: int | None = None) ->
         chapter_text=sample_text,
     )
 
-    translated = await _translate_chunk_with_continuation(
+    raw_result = await _translate_chunk_with_continuation(
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         source_text=sample_text,
         project=project,
     )
+
+    if enable_ann:
+        translated, ann_json = _split_translation_and_annotations(raw_result)
+        annotations_str = ""
+        if ann_json:
+            try:
+                parsed = json.loads(ann_json)
+                if isinstance(parsed, list):
+                    annotations_str = json.dumps(parsed, ensure_ascii=False)
+            except json.JSONDecodeError:
+                pass
+        db.update_chapter(chapter["id"], annotations=annotations_str)
+    else:
+        translated = raw_result
 
     translated_title = _extract_translated_title(translated, chapter["title"])
     db.update_chapter(chapter["id"], translated_content=translated, status="translated",
@@ -1143,6 +1216,38 @@ def combine_all_chapters(project_id: str) -> Path | None:
     db.update_project(project_id, translated_epub_path=str(out_path))
     log.info("Combined EPUB: %s", out_path)
     return out_path
+
+
+def build_annotations_book(project_id: str) -> Path | None:
+    """Build an EPUB containing all translator's annotations."""
+    from .epub_service import build_annotations_epub
+
+    project = db.get_project(project_id)
+    chapters = db.get_chapters(project_id)
+    if not project or not chapters:
+        return None
+
+    chapters_data = []
+    for ch in chapters:
+        raw_ann = ch.get("annotations") or ""
+        if not raw_ann:
+            continue
+        try:
+            annotations = json.loads(raw_ann)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not annotations:
+            continue
+        title = ch.get("translated_title") or ch.get("title", f"Chapter {ch['chapter_index'] + 1}")
+        chapters_data.append({"title": title, "annotations": annotations})
+
+    if not chapters_data:
+        return None
+
+    out_dir = _get_output_dir(project)
+    safe_name = re.sub(r'[<>:"/\\|?*]', '_', project["name"])[:80].strip()
+    out_path = out_dir / f"{safe_name}_annotations.epub"
+    return build_annotations_epub(chapters_data, out_path, book_title=project["name"])
 
 
 def get_chapter_files(project_id: str) -> list[dict]:
