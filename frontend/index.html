@@ -402,6 +402,35 @@
             <button class="btn btn-sm" id="btn-view-all-annotations" data-i18n="view_all_annotations">📝 查看所有附注</button>
             <button class="btn btn-sm" id="btn-quick-translate-titles" data-i18n="ai_translate_titles_short">🤖 翻译标题</button>
             <button class="btn btn-sm" id="btn-edit-titles" data-i18n="edit_chapter_titles">✏️ 编辑章节标题</button>
+            <div class="reader-settings-wrap">
+              <button class="btn btn-sm" id="btn-reader-settings">⚙️</button>
+              <div id="reader-settings-dropdown" class="reader-settings-dropdown hidden">
+                <div class="rset-group">
+                  <label data-i18n="reader_height">阅读框高度</label>
+                  <div class="rset-options" id="rset-height">
+                    <button class="rset-opt" data-val="compact" data-i18n="height_compact">紧凑</button>
+                    <button class="rset-opt active" data-val="standard" data-i18n="height_standard">标准</button>
+                    <button class="rset-opt" data-val="tall" data-i18n="height_tall">最大</button>
+                  </div>
+                </div>
+                <div class="rset-group">
+                  <label data-i18n="reader_font_size">字体大小</label>
+                  <div class="rset-options" id="rset-fontsize">
+                    <button class="rset-opt" data-val="small">A<sup>-</sup></button>
+                    <button class="rset-opt active" data-val="medium">A</button>
+                    <button class="rset-opt" data-val="large">A<sup>+</sup></button>
+                  </div>
+                </div>
+                <div class="rset-group">
+                  <label data-i18n="reader_theme">阅读主题</label>
+                  <div class="rset-options" id="rset-theme">
+                    <button class="rset-opt" data-val="dark" data-i18n="theme_dark">暗色</button>
+                    <button class="rset-opt" data-val="light" data-i18n="theme_light">亮色</button>
+                    <button class="rset-opt" data-val="sepia" data-i18n="theme_sepia">护眼</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

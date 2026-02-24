@@ -1082,6 +1082,7 @@ td input:focus { outline: none; }
   height: calc(100vh - 20px);
   min-height: 0;
   padding-bottom: 0 !important;
+  overflow-y: auto;
 }
 #panel-reader.active {
   display: flex !important;
@@ -1131,14 +1132,72 @@ td input:focus { outline: none; }
 
 .reader-toggle input { cursor: pointer; }
 
+/* ── Reader settings dropdown ──────────────────────────────────────── */
+.reader-settings-wrap { position: relative; }
+.reader-settings-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  min-width: 210px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+.rset-group { margin-bottom: 12px; }
+.rset-group:last-child { margin-bottom: 0; }
+.rset-group > label { display: block; font-size: 0.78rem; color: var(--text-dim); margin-bottom: 6px; font-weight: 600; }
+.rset-options { display: flex; gap: 4px; }
+.rset-opt {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+.rset-opt:hover { background: var(--bg-input); }
+.rset-opt.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── Reader height presets ────────────────────────────────────────── */
 .reader-book-view {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0;
-  flex: 1 1 0;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-height: 200px;
+  height: 65vh;
   overflow: hidden;
+  border-bottom: 1px solid var(--border);
 }
+#panel-reader.rh-compact .reader-book-view { height: 45vh; }
+#panel-reader.rh-standard .reader-book-view { height: 65vh; }
+#panel-reader.rh-tall .reader-book-view { height: 85vh; }
+
+/* ── Reader font size presets ─────────────────────────────────────── */
+#panel-reader.rf-small .reader-book-content { font-size: 0.9rem; line-height: 1.7; }
+#panel-reader.rf-medium .reader-book-content { font-size: 1.05rem; line-height: 1.9; }
+#panel-reader.rf-large .reader-book-content { font-size: 1.22rem; line-height: 2.0; }
+
+/* ── Reader color themes (scoped to book panes only) ──────────────── */
+#panel-reader.rt-dark .reader-book-content { background: #1a1d27; color: #e4e6f0; }
+#panel-reader.rt-dark .reader-book-header { background: #1a1d27; color: #8b8fa3; }
+
+#panel-reader.rt-light .reader-book-content { background: #ffffff; color: #1a1a1a; }
+#panel-reader.rt-light .reader-book-header { background: #f5f5f5; color: #555; border-color: #ddd; }
+#panel-reader.rt-light .reader-book-pane { border-color: #ddd; }
+#panel-reader.rt-light mark.ann-highlight { background: rgba(255, 200, 50, 0.45); }
+
+#panel-reader.rt-sepia .reader-book-content { background: #f4ecd8; color: #3b3122; }
+#panel-reader.rt-sepia .reader-book-header { background: #ebe0c8; color: #6b5d47; border-color: #d4c5a9; }
+#panel-reader.rt-sepia .reader-book-pane { border-color: #d4c5a9; }
+#panel-reader.rt-sepia mark.ann-highlight { background: rgba(200, 160, 60, 0.35); }
 
 .reader-book-view.single-pane {
   grid-template-columns: 1fr;

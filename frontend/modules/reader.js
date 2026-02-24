@@ -144,7 +144,62 @@ async function askAI() {
   clearQASelection();
 }
 
+// ── Reader settings (height / font / theme) ──────────────────────────
+const _SETTINGS_KEY = "reader-settings";
+const _DEFAULTS = { height: "standard", fontsize: "medium", theme: "dark" };
+
+function _loadReaderSettings() {
+  try { return { ..._DEFAULTS, ...JSON.parse(localStorage.getItem(_SETTINGS_KEY)) }; }
+  catch { return { ..._DEFAULTS }; }
+}
+
+function _saveReaderSettings(s) { localStorage.setItem(_SETTINGS_KEY, JSON.stringify(s)); }
+
+function _applyReaderSettings(s) {
+  const panel = $("#panel-reader");
+  panel.classList.forEach(c => { if (/^r[htf]-/.test(c)) panel.classList.remove(c); });
+  panel.classList.add(`rh-${s.height}`, `rf-${s.fontsize}`, `rt-${s.theme}`);
+
+  // Sync active button states
+  for (const [group, val] of [["rset-height", s.height], ["rset-fontsize", s.fontsize], ["rset-theme", s.theme]]) {
+    $(`#${group}`).querySelectorAll(".rset-opt").forEach(b => {
+      b.classList.toggle("active", b.dataset.val === val);
+    });
+  }
+}
+
+function _initReaderSettings() {
+  const s = _loadReaderSettings();
+  _applyReaderSettings(s);
+
+  // Toggle dropdown
+  $("#btn-reader-settings").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("#reader-settings-dropdown").classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    const dd = $("#reader-settings-dropdown");
+    if (!dd.classList.contains("hidden") && !dd.contains(e.target) && e.target !== $("#btn-reader-settings")) {
+      dd.classList.add("hidden");
+    }
+  });
+
+  // Option clicks
+  for (const [groupId, key] of [["rset-height", "height"], ["rset-fontsize", "fontsize"], ["rset-theme", "theme"]]) {
+    $(`#${groupId}`).addEventListener("click", (e) => {
+      const btn = e.target.closest(".rset-opt");
+      if (!btn) return;
+      const cur = _loadReaderSettings();
+      cur[key] = btn.dataset.val;
+      _saveReaderSettings(cur);
+      _applyReaderSettings(cur);
+    });
+  }
+}
+
 export function initReader() {
+  _initReaderSettings();
+
   // Exit reader → back to review
   $("#btn-reader-exit").addEventListener("click", () => { showPanel("review"); showReview(state.reviewIsStopped); });
 
