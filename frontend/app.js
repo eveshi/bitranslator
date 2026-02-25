@@ -49,6 +49,7 @@ async function navigateToStep(step) {
   try {
     const project = await apiJson(`/api/projects/${state.currentProjectId}`);
     const isStopped = project.status === "stopped";
+    _detectTranslatedChapters(project);
 
     switch (step) {
       case "analysis": showPanel(step); await showAnalysis(); break;
@@ -74,6 +75,13 @@ async function navigateToStep(step) {
   }
 }
 
+// ── Detect if project has any translated chapters ───────────────────
+function _detectTranslatedChapters(project) {
+  state.hasTranslatedChapters =
+    (project.translated_count > 0) ||
+    ["translating", "stopped", "completed"].includes(project.status);
+}
+
 // ── Open project by status ──────────────────────────────────────────
 async function openProject(projectId) {
   state.currentProjectId = projectId;
@@ -89,6 +97,7 @@ async function openProject(projectId) {
   const project = await apiJson(`/api/projects/${projectId}`);
   $("#edit-source-lang").value = project.source_language || "";
   $("#edit-target-lang").value = project.target_language || "";
+  _detectTranslatedChapters(project);
 
   switch (project.status) {
     case "uploaded":

@@ -12,4 +12,5 @@ export const state = {
   readerSelectedOriginal: "",
   readerSelectedTranslation: "",
   readerCurrentChapterId: "",
+  hasTranslatedChapters: false,
 };

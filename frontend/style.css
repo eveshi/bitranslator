@@ -1258,14 +1258,20 @@ td input:focus { outline: none; }
 }
 
 .reader-book-content h1 {
-  font-size: 1.4em;
+  font-size: 1.3em;
+  font-weight: 700;
   margin: 0.8em 0 0.5em;
   text-align: center;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .reader-book-content h2 {
-  font-size: 1.15em;
+  font-size: 1.1em;
+  font-weight: 600;
   margin: 0.7em 0 0.4em;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .reader-book-content p {

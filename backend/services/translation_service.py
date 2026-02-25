@@ -35,6 +35,17 @@ Follow the translation strategy and glossary strictly to ensure consistency acro
 • Use the glossary for all listed terms to ensure consistency.
 • Preserve paragraph structure. Every paragraph in the source must appear in the translation.
 • Do NOT stop early. Translate every single sentence until the end of the provided text.
+• Do NOT include the chapter title, chapter header, or "part X/Y" markers in your output. \
+Start directly with the translated body text. The chapter title line in the prompt is \
+for internal tracking only.
+• FOREIGN LANGUAGE PASSAGES: When the source text contains passages in a third language \
+(e.g. Latin in a French novel, French in a German novel, Italian in an English novel), \
+follow standard publishing convention: keep the foreign passage UNTRANSLATED in its \
+original language, wrap it in *asterisks for italics* (e.g. *Cogito, ergo sum*), and \
+immediately add a translation note in parentheses or brackets after it, e.g. \
+*Veni, vidi, vici*（拉丁语：我来，我见，我征服）. If annotations are enabled, also \
+include an entry in the annotations section explaining the phrase, its language, and \
+its significance in context.
 {output_rules}"""
 
 _OUTPUT_RULES_PLAIN = \
@@ -90,6 +101,32 @@ def _build_system_prompt(project: dict, strategy: dict) -> str:
         glossary_text=_build_glossary_text(strategy),
         output_rules=_OUTPUT_RULES_ANNOTATED if enable_ann else _OUTPUT_RULES_PLAIN,
     )
+
+
+def _strip_chunk_header(text: str, ch_title: str, chunk_idx: int, total_chunks: int) -> str:
+    """Remove any leaked chapter/chunk header lines from the AI's output."""
+    lines = text.split("\n")
+    cleaned = []
+    for line in lines:
+        stripped = line.strip()
+        # Skip lines that are the "── Chapter to Translate: ... ──" header
+        if stripped.startswith("──") and stripped.endswith("──"):
+            continue
+        # Skip lines that match the chunk label pattern: "title (part N/M)"
+        if total_chunks > 1:
+            part_marker = f"(part {chunk_idx + 1}/{total_chunks})"
+            alt_marker = f"({chunk_idx + 1}/{total_chunks})"
+            if part_marker in stripped or alt_marker in stripped:
+                if len(stripped) < len(ch_title) + 30:
+                    continue
+        # Skip lines that are just the chapter title repeated
+        if stripped == ch_title or stripped == f"── {ch_title} ──":
+            continue
+        cleaned.append(line)
+    # Remove leading blank lines that result from stripping
+    while cleaned and not cleaned[0].strip():
+        cleaned.pop(0)
+    return "\n".join(cleaned)
 
 
 def _split_translation_and_annotations(text: str) -> tuple[str, str]:
@@ -160,16 +197,23 @@ def _build_strategy_text(strategy: dict) -> str:
             "annotated; '日内瓦' (Geneva, well-known city) is not."
         )
     if strategy.get("annotate_names"):
-        protagonist_names = []
+        confirmed_pairs = []
         for n in strategy.get("character_names", []):
             if isinstance(n, dict) and n.get("original"):
-                protagonist_names.append(n["original"])
+                orig = n["original"]
+                trans = n.get("translated") or n.get("target") or ""
+                confirmed_pairs.append((orig, trans))
         exclude_note = ""
-        if protagonist_names:
+        if confirmed_pairs:
+            name_list = ", ".join(
+                f"{t}({o})" if t else o for o, t in confirmed_pairs
+            )
             exclude_note = (
-                f"\nThe following protagonist names are already fixed in the "
-                f"translation strategy and must NOT be annotated: "
-                f"{', '.join(protagonist_names)}."
+                f"\nCRITICAL: The following names have confirmed, fixed translations "
+                f"in the glossary. NEVER add parenthetical original-language annotations "
+                f"for them — their translations are already unified and consistent: "
+                f"{name_list}.\n"
+                f"Only annotate names that are NOT in this confirmed list."
             )
         annotations.append(
             "IMPORTANT – Original-text annotations for character names:\n"
@@ -401,6 +445,7 @@ async def translate_chapter(
                     log.warning("Failed to parse annotations JSON for chunk %d", i)
         else:
             trans_text = raw_result
+        trans_text = _strip_chunk_header(trans_text, ch_title, i, len(chunks))
         return i, trans_text, ann_list
 
     translated_parts: list[str | None] = [None] * len(chunks)
@@ -525,6 +570,7 @@ async def translate_sample(project_id: str, chapter_index: int | None = None) ->
     else:
         translated = raw_result
 
+    translated = _strip_chunk_header(translated, chapter["title"], 0, 1)
     translated_title = _extract_translated_title(translated, chapter["title"])
     db.update_chapter(chapter["id"], translated_content=translated, status="translated",
                       translated_title=translated_title)

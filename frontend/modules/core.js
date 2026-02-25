@@ -34,10 +34,15 @@ export function showPanel(name) {
   const bar = $("#steps-bar");
   if (idx >= 0) {
     show(bar);
+    const reviewIdx = STEPS.indexOf("review");
     bar.querySelectorAll(".step").forEach((s, i) => {
       s.classList.remove("active", "done");
       if (i < idx) s.classList.add("done");
       if (i === idx) s.classList.add("active");
+      // Allow jumping forward to review/reader/done when translated chapters exist
+      if (i > idx && i >= reviewIdx && state.hasTranslatedChapters) {
+        s.classList.add("done");
+      }
     });
   }
 
@@ -65,30 +70,52 @@ export function stopPolling() {
 // ── Text → structured HTML (shared by reader and backend) ───────────
 export function textToHtml(text, chapterTitle) {
   const escape = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const similarity = (a, b) => {
-    if (!a || !b) return 0;
-    const sa = new Set(a.toLowerCase()), sb = new Set(b.toLowerCase());
-    const inter = [...sa].filter(c => sb.has(c)).length;
-    return inter / Math.max(sa.size + sb.size - inter, 1);
-  };
-  let titleAdded = false;
-  return text.split(/\n\n+/).map((para) => {
-    const trimmed = para.trim();
-    if (!trimmed) return "";
+
+  const normalize = s => s.replace(/\s+/g, " ").trim().toLowerCase();
+
+  // Split on double-newlines first; if that yields only 1 block with many
+  // single-newline breaks, fall back to single-newline splitting.
+  let paragraphs = text.split(/\n\n+/).map(s => s.trim()).filter(Boolean);
+  if (paragraphs.length === 1 && paragraphs[0].includes("\n")) {
+    paragraphs = paragraphs[0].split(/\n/).map(s => s.trim()).filter(Boolean);
+  }
+
+  let html = "";
+
+  // Always render the known title as a styled heading
+  if (chapterTitle) {
+    html += `<h1 class="chapter-title">${escape(chapterTitle)}</h1>`;
+  }
+
+  const titleNorm = chapterTitle ? normalize(chapterTitle) : "";
+  let firstBodyPara = true;
+
+  for (const trimmed of paragraphs) {
+    if (!trimmed) continue;
     const escaped = escape(trimmed).replace(/\n/g, "<br>");
-    if (/^[\s*\-=~·•—]{3,}$/.test(trimmed)) return `<p class="separator">* * *</p>`;
-    if (!titleAdded) {
-      titleAdded = true;
-      if (chapterTitle && (
-        trimmed.toLowerCase() === chapterTitle.toLowerCase() ||
-        similarity(trimmed, chapterTitle) > 0.6 ||
-        (trimmed.length < 80 && !/[。.！!？?」"…]$/.test(trimmed))
-      )) {
-        return `<h1>${escaped}</h1>`;
+
+    // Skip the first paragraph ONLY if it is clearly the same title
+    // (short text that closely matches the known chapter title)
+    if (firstBodyPara && titleNorm) {
+      firstBodyPara = false;
+      const paraNorm = normalize(trimmed);
+      // Only consider paragraphs that are short enough to be a title
+      // (no more than 2x the title length + some slack)
+      const maxTitleLen = Math.max(titleNorm.length * 2, 120);
+      if (paraNorm.length <= maxTitleLen) {
+        if (paraNorm === titleNorm) continue;
+        // Strip common decorations (dashes, colons, numbering) and compare
+        const stripDeco = s => s.replace(/[—–\-:：·.。,，\s]/g, "");
+        if (stripDeco(paraNorm) === stripDeco(titleNorm)) continue;
       }
     }
-    if (trimmed.length < 60 && /^(第.{1,6}[章节回部篇]|Chapter\s+\d|Part\s+\d|PART\s+\d|\d+\.)/.test(trimmed))
-      return `<h2>${escaped}</h2>`;
-    return `<p>${escaped}</p>`;
-  }).join("");
+
+    if (/^[\s*\-=~·•—]{3,}$/.test(trimmed)) { html += `<p class="separator">* * *</p>`; continue; }
+    if (trimmed.length < 60 && /^(第.{1,6}[章节回部篇]|Chapter\s+\d|Part\s+\d|PART\s+\d|\d+\.)/.test(trimmed)) {
+      html += `<h2>${escaped}</h2>`; continue;
+    }
+    html += `<p>${escaped}</p>`;
+  }
+
+  return html;
 }
