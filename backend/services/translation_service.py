@@ -370,15 +370,8 @@ async def translate_chapter(
     ch_title = chapter["title"]
     _set_chunk_progress(project_id, ch_idx, ch_title, 0, len(chunks))
 
-    translated_parts = []
-    all_annotations = []
-    for i, chunk in enumerate(chunks):
-        if _is_cancelled(project_id):
-            if translated_parts:
-                partial = "\n\n".join(translated_parts)
-                db.update_chapter(chapter_id, translated_content=partial, status="pending")
-            raise _StopRequested()
-
+    async def _do_one_chunk(i: int, chunk: str) -> tuple[int, str, list]:
+        """Translate a single chunk; returns (index, translated_text, annotations)."""
         chunk_label = ch_title
         if len(chunks) > 1:
             chunk_label += f" (part {i + 1}/{len(chunks)})"
@@ -396,24 +389,48 @@ async def translate_chapter(
             project=project,
         )
 
+        ann_list = []
         if enable_ann:
             trans_text, ann_json = _split_translation_and_annotations(raw_result)
-            translated_parts.append(trans_text)
             if ann_json:
                 try:
                     parsed = json.loads(ann_json)
                     if isinstance(parsed, list):
-                        all_annotations.extend(parsed)
+                        ann_list = parsed
                 except json.JSONDecodeError:
                     log.warning("Failed to parse annotations JSON for chunk %d", i)
         else:
-            translated_parts.append(raw_result)
+            trans_text = raw_result
+        return i, trans_text, ann_list
 
-        partial = "\n\n".join(translated_parts)
+    translated_parts: list[str | None] = [None] * len(chunks)
+    all_annotations = []
+    done_count = 0
+    concurrency = min(settings.parallel_chunks, len(chunks))
+
+    batch_start = 0
+    while batch_start < len(chunks):
+        if _is_cancelled(project_id):
+            filled = [p for p in translated_parts if p is not None]
+            if filled:
+                db.update_chapter(chapter_id, translated_content="\n\n".join(filled), status="pending")
+            raise _StopRequested()
+
+        batch_end = min(batch_start + concurrency, len(chunks))
+        tasks = [_do_one_chunk(i, chunks[i]) for i in range(batch_start, batch_end)]
+        results = await asyncio.gather(*tasks)
+
+        for idx, trans_text, ann_list in results:
+            translated_parts[idx] = trans_text
+            all_annotations.extend(ann_list)
+            done_count += 1
+
+        partial = "\n\n".join(p for p in translated_parts if p is not None)
         db.update_chapter(chapter_id, translated_content=partial)
-        _set_chunk_progress(project_id, ch_idx, ch_title, i + 1, len(chunks))
+        _set_chunk_progress(project_id, ch_idx, ch_title, done_count, len(chunks))
+        batch_start = batch_end
 
-    full_translation = "\n\n".join(translated_parts)
+    full_translation = "\n\n".join(p for p in translated_parts if p)
 
     annotations_str = json.dumps(all_annotations, ensure_ascii=False) if all_annotations else ""
     translated_title = _extract_translated_title(full_translation, chapter["title"])
@@ -1186,8 +1203,14 @@ async def rescan_all_names(project_id: str) -> dict:
     return name_map
 
 
-def combine_all_chapters(project_id: str) -> Path | None:
-    """Combine all translated chapters into a single EPUB."""
+def combine_all_chapters(
+    project_id: str,
+    include_annotations: bool = False,
+    ann_placement: str = "end",
+    include_highlights: bool = False,
+    include_qa: bool = False,
+) -> Path | None:
+    """Combine all translated chapters into a single EPUB with optional appendices."""
     project = db.get_project(project_id)
     chapters = db.get_chapters(project_id)
 
@@ -1196,6 +1219,8 @@ def combine_all_chapters(project_id: str) -> Path | None:
 
     translations = {}
     bilingual_titles = {}
+    per_chapter_annotations: dict[str, list] = {}
+
     for ch in chapters:
         fname = ch.get("epub_file_name")
         if not fname:
@@ -1203,19 +1228,137 @@ def combine_all_chapters(project_id: str) -> Path | None:
         tt = ch.get("translated_title") or ""
         bilingual_titles[fname] = _bilingual_title(ch["title"], tt)
         if ch.get("translated_content"):
-            translations[fname] = ch["translated_content"]
+            content = ch["translated_content"]
+            # Inline annotations after each chapter
+            if include_annotations and ann_placement == "chapter":
+                raw_ann = ch.get("annotations") or ""
+                if raw_ann:
+                    try:
+                        anns = json.loads(raw_ann)
+                        if isinstance(anns, list) and anns:
+                            ann_html = _format_annotations_inline(anns)
+                            content += ann_html
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+            # Inline highlights after each chapter
+            if include_highlights:
+                raw_hl = ch.get("highlights") or ""
+                if raw_hl:
+                    try:
+                        hls = json.loads(raw_hl)
+                        if isinstance(hls, list) and hls:
+                            content += _format_highlights_inline(hls)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+            translations[fname] = content
+
+            # Collect for end-of-book appendix
+            if include_annotations and ann_placement == "end":
+                raw_ann = ch.get("annotations") or ""
+                if raw_ann:
+                    try:
+                        anns = json.loads(raw_ann)
+                        if isinstance(anns, list) and anns:
+                            title = ch.get("translated_title") or ch.get("title", "")
+                            per_chapter_annotations[title] = anns
+                    except (json.JSONDecodeError, TypeError):
+                        pass
 
     if not translations:
         return None
+
+    # Build appendix text to inject at end
+    appendix_parts = []
+    if include_annotations and ann_placement == "end" and per_chapter_annotations:
+        appendix_parts.append(_format_annotations_appendix(per_chapter_annotations))
+    if include_qa:
+        qa_all = db.get_qa_history(project_id)
+        if qa_all:
+            ch_map = {ch["id"]: ch for ch in chapters}
+            appendix_parts.append(_format_qa_appendix(qa_all, ch_map))
 
     out_dir = _get_output_dir(project)
     safe_name = re.sub(r'[<>:"/\\|?*]', '_', project["name"])[:80].strip()
     out_path = out_dir / f"{safe_name}_complete.epub"
     build_translated_epub(project["original_epub_path"], translations, out_path,
-                          bilingual_titles=bilingual_titles)
+                          bilingual_titles=bilingual_titles,
+                          appendix_html="\n".join(appendix_parts) if appendix_parts else "")
     db.update_project(project_id, translated_epub_path=str(out_path))
     log.info("Combined EPUB: %s", out_path)
     return out_path
+
+
+def _format_annotations_inline(anns: list) -> str:
+    """Format annotations as HTML to append after a chapter's translation."""
+    html = '\n<hr style="margin:2em 0 1em"/>\n<h3>Translator\'s Notes / 翻译附注</h3>\n<ol>\n'
+    for a in anns:
+        src = a.get("src", "")
+        tgt = a.get("tgt", "")
+        note = a.get("note", "")
+        html += f'<li><em>{_esc_html(src)}</em>'
+        if tgt:
+            html += f' → {_esc_html(tgt)}'
+        if note:
+            html += f'<br/>{_esc_html(note)}'
+        html += '</li>\n'
+    html += '</ol>\n'
+    return html
+
+
+def _format_highlights_inline(hls: list) -> str:
+    """Format highlights as HTML to append after a chapter's translation."""
+    html = '\n<hr style="margin:2em 0 1em"/>\n<h3>Highlights & Notes / 划线笔记</h3>\n<ol>\n'
+    for h in hls:
+        text = h.get("text", "")
+        note = h.get("note", "")
+        html += f'<li>"{_esc_html(text)}"'
+        if note:
+            html += f'<br/><em>{_esc_html(note)}</em>'
+        html += '</li>\n'
+    html += '</ol>\n'
+    return html
+
+
+def _format_annotations_appendix(per_chapter: dict[str, list]) -> str:
+    """Format all annotations as a book-end appendix."""
+    html = '<h2>Translator\'s Notes / 翻译附注</h2>\n'
+    for title, anns in per_chapter.items():
+        html += f'<h3>{_esc_html(title)}</h3>\n<ol>\n'
+        for a in anns:
+            src = a.get("src", "")
+            tgt = a.get("tgt", "")
+            note = a.get("note", "")
+            html += f'<li><em>{_esc_html(src)}</em>'
+            if tgt:
+                html += f' → {_esc_html(tgt)}'
+            if note:
+                html += f'<br/>{_esc_html(note)}'
+            html += '</li>\n'
+        html += '</ol>\n'
+    return html
+
+
+def _format_qa_appendix(qa_all: list, ch_map: dict) -> str:
+    """Format all Q&A as a book-end appendix."""
+    html = '<h2>Q&A / 问答记录</h2>\n'
+    by_ch: dict[str, list] = {}
+    for qa in qa_all:
+        cid = qa.get("chapter_id", "general")
+        by_ch.setdefault(cid, []).append(qa)
+    for cid, qas in by_ch.items():
+        ch = ch_map.get(cid)
+        title = (ch.get("translated_title") or ch.get("title", "")) if ch else "General"
+        html += f'<h3>{_esc_html(title)}</h3>\n'
+        for qa in qas:
+            q = qa.get("question", "")
+            a = qa.get("answer", "")
+            html += f'<p><strong>Q:</strong> {_esc_html(q)}</p>\n'
+            html += f'<p><strong>A:</strong> {_esc_html(a)}</p>\n<hr/>\n'
+    return html
+
+
+def _esc_html(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def build_annotations_book(project_id: str) -> Path | None:
@@ -1248,6 +1391,130 @@ def build_annotations_book(project_id: str) -> Path | None:
     safe_name = re.sub(r'[<>:"/\\|?*]', '_', project["name"])[:80].strip()
     out_path = out_dir / f"{safe_name}_annotations.epub"
     return build_annotations_epub(chapters_data, out_path, book_title=project["name"])
+
+
+def _collect_highlights(project_id: str) -> tuple[dict | None, list[dict], list[tuple[str, list]]]:
+    """Return (project, chapters, [(title, highlights_list), ...])."""
+    project = db.get_project(project_id)
+    chapters = db.get_chapters(project_id)
+    if not project or not chapters:
+        return None, [], []
+    result = []
+    for ch in chapters:
+        raw = ch.get("highlights") or ""
+        if not raw:
+            continue
+        try:
+            highlights = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not highlights:
+            continue
+        title = ch.get("translated_title") or ch.get("title", f"Chapter {ch['chapter_index'] + 1}")
+        result.append((title, highlights))
+    return project, chapters, result
+
+
+def build_highlights_markdown(project_id: str) -> Path | None:
+    """Build a Markdown file containing all user highlights and notes."""
+    project, _, hl_data = _collect_highlights(project_id)
+    if not project or not hl_data:
+        return None
+
+    lines = [f"# {project['name']} — Highlights & Notes\n"]
+    for title, highlights in hl_data:
+        lines.append(f"\n## {title}\n")
+        for i, h in enumerate(highlights, 1):
+            text = h.get("text", "")
+            note = h.get("note", "")
+            lines.append(f"**{i}.** > {text}")
+            if note:
+                lines.append(f"   *{note}*")
+            lines.append("")
+
+    out_dir = _get_output_dir(project)
+    safe_name = re.sub(r'[<>:"/\\|?*]', '_', project["name"])[:80].strip()
+    out_path = out_dir / f"{safe_name}_highlights.md"
+    out_path.write_text("\n".join(lines), encoding="utf-8")
+    log.info("Built highlights Markdown: %s", out_path)
+    return out_path
+
+
+def build_highlights_book(project_id: str) -> Path | None:
+    """Build an EPUB containing all user highlights and notes."""
+    from .epub_service import build_annotations_epub
+
+    project = db.get_project(project_id)
+    chapters = db.get_chapters(project_id)
+    if not project or not chapters:
+        return None
+
+    chapters_data = []
+    for ch in chapters:
+        raw = ch.get("highlights") or ""
+        if not raw:
+            continue
+        try:
+            highlights = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not highlights:
+            continue
+        title = ch.get("translated_title") or ch.get("title", f"Chapter {ch['chapter_index'] + 1}")
+        annotations = []
+        for h in highlights:
+            annotations.append({
+                "src": h.get("text", "")[:80],
+                "tgt": "",
+                "note": h.get("note", "") or "(highlight)",
+            })
+        chapters_data.append({"title": title, "annotations": annotations})
+
+    if not chapters_data:
+        return None
+
+    out_dir = _get_output_dir(project)
+    safe_name = re.sub(r'[<>:"/\\|?*]', '_', project["name"])[:80].strip()
+    out_path = out_dir / f"{safe_name}_highlights.epub"
+    return build_annotations_epub(chapters_data, out_path, book_title=f"{project['name']} Highlights & Notes")
+
+
+def build_qa_book(project_id: str) -> Path | None:
+    """Build an EPUB containing all Q&A conversations."""
+    from .epub_service import build_annotations_epub
+
+    project = db.get_project(project_id)
+    chapters = db.get_chapters(project_id)
+    qa_all = db.get_qa_history(project_id)
+    if not project or not qa_all:
+        return None
+
+    ch_map = {ch["id"]: ch for ch in chapters}
+    by_chapter: dict[str, list] = {}
+    for qa in qa_all:
+        cid = qa.get("chapter_id", "general")
+        by_chapter.setdefault(cid, []).append(qa)
+
+    chapters_data = []
+    for cid, qas in by_chapter.items():
+        ch = ch_map.get(cid)
+        title = (ch.get("translated_title") or ch.get("title", "")) if ch else "General"
+        annotations = []
+        for qa in qas:
+            annotations.append({
+                "src": qa.get("question", "")[:80],
+                "tgt": "",
+                "note": qa.get("answer", ""),
+            })
+        chapters_data.append({"title": f"Q&A: {title}", "annotations": annotations})
+
+    if not chapters_data:
+        return None
+
+    out_dir = _get_output_dir(project)
+    safe_name = re.sub(r'[<>:"/\\|?*]', '_', project["name"])[:80].strip()
+    out_path = out_dir / f"{safe_name}_qa.epub"
+    return build_annotations_epub(chapters_data, out_path, book_title=f"{project['name']} Q&A")
 
 
 def get_chapter_files(project_id: str) -> list[dict]:

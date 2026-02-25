@@ -310,6 +310,7 @@ def build_translated_epub(
     translations: dict[str, str],   # file_name -> translated HTML body text
     output_path: str | Path,
     bilingual_titles: dict[str, str] | None = None,
+    appendix_html: str = "",
 ) -> Path:
     """Rebuild EPUB with translated text while preserving structure and styles."""
     book = epub.read_epub(str(original_epub_path), options={"ignore_ncx": True})
@@ -327,6 +328,21 @@ def build_translated_epub(
         bl_title = bilingual_titles.get(fname, "")
         new_html = _replace_body_text(original_html, translated_text, bilingual_title=bl_title)
         item.set_content(new_html.encode("utf-8"))
+
+    # Add appendix chapter if content was provided
+    if appendix_html.strip():
+        appendix_item = epub.EpubHtml(
+            title="Appendix / 附录",
+            file_name="appendix.xhtml",
+            lang="zh",
+        )
+        appendix_item.content = (
+            '<html><head><title>Appendix</title></head>'
+            f'<body>{appendix_html}</body></html>'
+        ).encode("utf-8")
+        book.add_item(appendix_item)
+        if book.spine:
+            book.spine.append(appendix_item)
 
     # Rebuild full TOC from document items for proper NCX/Nav generation
     _rebuild_toc(book, bilingual_titles, old_toc_map)

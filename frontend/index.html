@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BiTranslator – 智能全书翻译</title>
-  <link rel="stylesheet" href="style.css?v=19" />
+  <link rel="stylesheet" href="style.css?v=21" />
 </head>
 <body>
   <div id="app">
@@ -114,6 +114,9 @@
               <label data-i18n="target_language">目标语言 <input type="text" id="target-lang" value="简体中文" /></label>
             </div>
             <button class="btn btn-primary" id="btn-upload" data-i18n="upload_btn">选择文件并上传</button>
+            <div class="import-divider"><span>or</span></div>
+            <button class="btn" id="btn-import-project" data-i18n="import_project">📥 导入项目文件 (.json)</button>
+            <input type="file" id="import-file-input" accept=".json" hidden />
           </div>
         </div>
       </section>
@@ -445,6 +448,21 @@
           </div>
         </div>
 
+        <!-- Highlight action bar (shown on text selection) -->
+        <div id="reader-highlight-bar" class="reader-highlight-bar hidden">
+          <button class="btn btn-sm btn-highlight-action" id="btn-add-highlight" title="Highlight">🖍️</button>
+          <button class="btn btn-sm btn-highlight-action" id="btn-add-note" title="Add Note">📝</button>
+        </div>
+
+        <!-- Note input popup -->
+        <div id="reader-note-popup" class="reader-note-popup hidden">
+          <textarea id="reader-note-input" rows="3" data-i18n="note_placeholder" placeholder="输入笔记…"></textarea>
+          <div class="note-popup-actions">
+            <button class="btn btn-primary btn-sm" id="btn-save-note" data-i18n="save_note">保存</button>
+            <button class="btn btn-sm" id="btn-cancel-note" data-i18n="cancel">取消</button>
+          </div>
+        </div>
+
         <!-- Single annotation tooltip (shown when clicking a highlight) -->
         <div id="reader-ann-tooltip" class="reader-ann-tooltip hidden">
           <button class="btn-icon ann-tooltip-close" id="btn-close-ann-tooltip">✕</button>
@@ -494,11 +512,68 @@
         <p id="done-hint" data-i18n="done_hint_complete">每章译文已单独保存为 EPUB。您可以逐章下载，也可以合并为完整译本。</p>
 
         <div class="done-actions">
-          <button class="btn btn-primary btn-lg" id="btn-combine-download" data-i18n="combine_download">合并为完整 EPUB 并下载</button>
-          <button class="btn" id="btn-download-annotations" data-i18n="download_annotations_epub">📥 下载附注 EPUB</button>
+          <button class="btn btn-primary btn-lg" id="btn-open-download-panel" data-i18n="download_options">📥 下载 / 导出</button>
           <button class="btn" id="btn-back-to-review" data-i18n="back_to_review">← 返回审阅</button>
           <button class="btn" id="btn-resume-translate" style="display:none" data-i18n="continue_translate">继续翻译剩余章节</button>
           <button class="btn" id="btn-new-project" data-i18n="new_book">翻译新书</button>
+        </div>
+
+        <!-- Download/Export options modal -->
+        <div id="download-panel-overlay" class="modal-overlay hidden">
+          <div class="modal-content download-panel-modal">
+            <div class="modal-header">
+              <h3 data-i18n="download_options">📥 下载 / 导出</h3>
+              <button class="btn-icon" id="btn-close-download-panel">✕</button>
+            </div>
+            <div class="download-panel-body">
+              <!-- Combined EPUB -->
+              <div class="dl-section">
+                <h4 data-i18n="combine_book">合并全书 EPUB</h4>
+                <div class="dl-option-row">
+                  <label><input type="checkbox" id="dl-include-annotations" checked /> <span data-i18n="include_annotations">包含翻译附注</span></label>
+                </div>
+                <div class="dl-option-row" id="dl-ann-placement-row">
+                  <label data-i18n="annotation_placement">附注位置：</label>
+                  <select id="dl-ann-placement">
+                    <option value="end" data-i18n="ann_at_end">全书末尾</option>
+                    <option value="chapter" data-i18n="ann_after_chapter">每章后面</option>
+                  </select>
+                </div>
+                <div class="dl-option-row">
+                  <label><input type="checkbox" id="dl-include-highlights" /> <span data-i18n="include_highlights">包含划线笔记</span></label>
+                </div>
+                <div class="dl-option-row">
+                  <label><input type="checkbox" id="dl-include-qa" /> <span data-i18n="include_qa">包含 AI Q&A</span></label>
+                </div>
+                <button class="btn btn-primary" id="btn-combine-download" data-i18n="combine_download">合并为完整 EPUB 并下载</button>
+              </div>
+
+              <hr class="dl-divider" />
+
+              <!-- Individual downloads -->
+              <div class="dl-section">
+                <h4 data-i18n="individual_downloads">单独下载</h4>
+                <div class="dl-btn-group">
+                  <button class="btn btn-sm" id="btn-download-annotations" data-i18n="download_annotations_epub">📥 附注 EPUB</button>
+                  <button class="btn btn-sm" id="btn-download-qa" data-i18n="download_qa_epub">📥 Q&A EPUB</button>
+                  <button class="btn btn-sm" id="btn-download-highlights-epub" data-i18n="download_highlights_epub">📥 划线笔记 EPUB</button>
+                  <button class="btn btn-sm" id="btn-download-highlights-md" data-i18n="download_highlights_md">📥 划线笔记 Markdown</button>
+                </div>
+              </div>
+
+              <hr class="dl-divider" />
+
+              <!-- Project export -->
+              <div class="dl-section">
+                <h4 data-i18n="export_project_title">导出项目</h4>
+                <p class="hint" data-i18n="export_project_hint">导出项目文件(.json)可分享给他人，对方可在自己的 BiTranslator 实例中导入并浏览全部内容。</p>
+                <div class="dl-option-row">
+                  <label><input type="checkbox" id="dl-export-highlights" checked /> <span data-i18n="export_include_highlights">包含划线笔记</span></label>
+                </div>
+                <button class="btn btn-sm" id="btn-export-project" data-i18n="export_project">📤 导出项目</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="card full-width">
@@ -551,6 +626,6 @@
     </main>
   </div>
 
-  <script type="module" src="app.js?v=17"></script>
+  <script type="module" src="app.js?v=19"></script>
 </body>
 </html>

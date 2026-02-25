@@ -332,11 +332,23 @@ async def download_chapter_epub(project_id: str, chapter_id: str):
 # ── Combine & Download ─────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/combine")
-async def combine_chapters(project_id: str):
+async def combine_chapters(
+    project_id: str,
+    include_annotations: bool = False,
+    ann_placement: str = "end",
+    include_highlights: bool = False,
+    include_qa: bool = False,
+):
     p = db.get_project(project_id)
     if not p:
         raise HTTPException(404, "Project not found")
-    result = translation_service.combine_all_chapters(project_id)
+    result = translation_service.combine_all_chapters(
+        project_id,
+        include_annotations=include_annotations,
+        ann_placement=ann_placement,
+        include_highlights=include_highlights,
+        include_qa=include_qa,
+    )
     if not result:
         raise HTTPException(400, "No translated chapters to combine")
     return {"ok": True, "path": str(result)}
@@ -368,6 +380,45 @@ async def download_annotations_epub(project_id: str):
     result = translation_service.build_annotations_book(project_id)
     if not result:
         raise HTTPException(400, "No annotations available")
+    return FileResponse(
+        path=str(result),
+        media_type="application/epub+zip",
+        filename=result.name,
+    )
+
+
+@router.get("/projects/{project_id}/download-highlights")
+async def download_highlights(project_id: str, format: str = "epub"):
+    p = db.get_project(project_id)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    if format == "md":
+        result = translation_service.build_highlights_markdown(project_id)
+        if not result:
+            raise HTTPException(400, "No highlights or notes available")
+        return FileResponse(
+            path=str(result),
+            media_type="text/markdown; charset=utf-8",
+            filename=result.name,
+        )
+    result = translation_service.build_highlights_book(project_id)
+    if not result:
+        raise HTTPException(400, "No highlights or notes available")
+    return FileResponse(
+        path=str(result),
+        media_type="application/epub+zip",
+        filename=result.name,
+    )
+
+
+@router.get("/projects/{project_id}/download-qa")
+async def download_qa_epub(project_id: str):
+    p = db.get_project(project_id)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    result = translation_service.build_qa_book(project_id)
+    if not result:
+        raise HTTPException(400, "No Q&A history available")
     return FileResponse(
         path=str(result),
         media_type="application/epub+zip",
@@ -486,7 +537,19 @@ async def ask_about_translation(project_id: str, req: AskAboutTranslationRequest
         user_prompt=user_prompt,
         max_tokens=8192,
     )
+
+    db.save_qa(project_id, req.chapter_id or "", req.question, answer)
+
     return {"answer": answer}
+
+
+@router.get("/projects/{project_id}/qa-history")
+async def get_qa_history(project_id: str, chapter_id: str = ""):
+    if chapter_id:
+        records = db.get_qa_history(project_id, chapter_id)
+    else:
+        records = db.get_qa_history(project_id)
+    return {"history": records}
 
 
 # ── Chapter title management ───────────────────────────────────────────

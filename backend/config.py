@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Max words for sample translation (first chapter excerpt)
     sample_max_words: int = 3000
 
+    # Number of chunks to translate in parallel within a single chapter
+    parallel_chunks: int = 3
+
     # Max words to read for writing style analysis (only first N words are
     # summarized; background/terms/characters come from online research)
     analysis_max_words: int = 15000

@@ -17,6 +17,47 @@ export function chapterDisplayLabel(ch) {
 }
 
 let _currentAnnotations = [];
+let _currentHighlights = [];
+let _pendingHighlightText = "";
+
+// ── Highlights & Notes ────────────────────────────────────────────────
+function _applyHighlights(transEl, highlights) {
+  if (!highlights || highlights.length === 0) return;
+  let html = transEl.innerHTML;
+  for (let i = 0; i < highlights.length; i++) {
+    const text = highlights[i].text;
+    if (!text || text.length < 2) continue;
+    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hasNote = highlights[i].note ? ' has-note' : '';
+    const noteAttr = highlights[i].note ? ` data-note="${esc(highlights[i].note)}"` : '';
+    html = html.replace(
+      new RegExp(`(${escaped})`, "g"),
+      `<mark class="user-highlight${hasNote}" data-hl-idx="${i}"${noteAttr}>$1</mark>`
+    );
+  }
+  transEl.innerHTML = html;
+}
+
+async function _saveHighlights() {
+  if (!state.readerCurrentChapterId) return;
+  try {
+    await apiJson(`/api/projects/${state.currentProjectId}/chapters/${state.readerCurrentChapterId}/highlights`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ highlights: _currentHighlights }),
+    });
+  } catch (e) { console.error("Failed to save highlights", e); }
+}
+
+function _refreshHighlightsDisplay() {
+  const transEl = $("#reader-book-translated-content");
+  transEl.querySelectorAll("mark.user-highlight").forEach(m => {
+    m.replaceWith(document.createTextNode(m.textContent));
+  });
+  _applyHighlights(transEl, _currentHighlights);
+  if ($("#reader-show-annotations").checked && _currentAnnotations.length > 0) {
+    _highlightAnnotatedText(transEl, _currentAnnotations);
+  }
+}
 
 function _renderAnnotationsModal(annotations) {
   const list = $("#annotations-modal-list");
@@ -73,10 +114,11 @@ export async function loadReaderChapter(idx) {
   transEl.innerHTML = "<p style='color:var(--text-dim)'>...</p>";
 
   try {
-    const [orig, trans, annResp] = await Promise.all([
+    const [orig, trans, annResp, hlResp] = await Promise.all([
       apiJson(`/api/projects/${state.currentProjectId}/chapters/${ch.id}/original`),
       apiJson(`/api/projects/${state.currentProjectId}/chapters/${ch.id}/translation`),
       apiJson(`/api/projects/${state.currentProjectId}/chapters/${ch.id}/annotations`).catch(() => ({ annotations: [] })),
+      apiJson(`/api/projects/${state.currentProjectId}/chapters/${ch.id}/highlights`).catch(() => ({ highlights: [] })),
     ]);
     origEl.innerHTML = textToHtml(orig.text || "", ch.title);
     transEl.innerHTML = ch.status === "translated"
@@ -84,8 +126,11 @@ export async function loadReaderChapter(idx) {
       : `<p style='color:var(--text-dim)'>(${t("not_translated_yet")})</p>`;
 
     _currentAnnotations = annResp.annotations || [];
+    _currentHighlights = hlResp.highlights || [];
     hide($("#reader-ann-tooltip"));
+    hide($("#reader-highlight-bar"));
 
+    _applyHighlights(transEl, _currentHighlights);
     if ($("#reader-show-annotations").checked && _currentAnnotations.length > 0) {
       _highlightAnnotatedText(transEl, _currentAnnotations);
     }
@@ -95,6 +140,27 @@ export async function loadReaderChapter(idx) {
     _currentAnnotations = [];
   }
   clearQASelection();
+  _loadQAHistory(ch.id);
+}
+
+async function _loadQAHistory(chapterId) {
+  const msgs = $("#reader-qa-messages");
+  try {
+    const resp = await apiJson(`/api/projects/${state.currentProjectId}/qa-history?chapter_id=${chapterId}`);
+    const history = resp.history || [];
+    msgs.innerHTML = "";
+    for (const qa of history) {
+      const userMsg = document.createElement("div"); userMsg.className = "qa-msg user";
+      userMsg.textContent = qa.question;
+      msgs.appendChild(userMsg);
+      const aiMsg = document.createElement("div"); aiMsg.className = "qa-msg ai";
+      aiMsg.innerHTML = textToHtml(qa.answer || "");
+      msgs.appendChild(aiMsg);
+    }
+    if (history.length) msgs.scrollTop = msgs.scrollHeight;
+  } catch (e) {
+    console.error("Failed to load QA history", e);
+  }
 }
 
 export async function openChapterReader(ch) {
@@ -257,24 +323,100 @@ export function initReader() {
     if (e.target === $("#annotations-overlay")) hide($("#annotations-overlay"));
   });
 
-  // Text selection for Q&A
-  document.addEventListener("mouseup", () => {
+  // Text selection for Q&A and highlights
+  document.addEventListener("mouseup", (evt) => {
     const panel = $("#panel-reader");
     if (!panel || !panel.classList.contains("active")) return;
+    if (evt.target.closest(".reader-highlight-bar") || evt.target.closest(".reader-note-popup")) return;
+
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return;
+    if (!sel || sel.isCollapsed) { hide($("#reader-highlight-bar")); return; }
     const text = sel.toString().trim();
-    if (!text || text.length < 2) return;
+    if (!text || text.length < 2) { hide($("#reader-highlight-bar")); return; }
     const range = sel.getRangeAt(0);
     const origPane = $("#reader-book-original-content");
     const transPane = $("#reader-book-translated-content");
-    if (origPane.contains(range.startContainer)) { state.readerSelectedOriginal = text; state.readerSelectedTranslation = ""; }
-    else if (transPane.contains(range.startContainer)) { state.readerSelectedTranslation = text; state.readerSelectedOriginal = ""; }
-    else return;
+    if (origPane.contains(range.startContainer)) {
+      state.readerSelectedOriginal = text; state.readerSelectedTranslation = "";
+      hide($("#reader-highlight-bar"));
+    } else if (transPane.contains(range.startContainer)) {
+      state.readerSelectedTranslation = text; state.readerSelectedOriginal = "";
+      _pendingHighlightText = text;
+      const rect = range.getBoundingClientRect();
+      const bar = $("#reader-highlight-bar");
+      bar.style.top = `${rect.top + window.scrollY - 40}px`;
+      bar.style.left = `${rect.left + window.scrollX + rect.width / 2 - 50}px`;
+      show(bar);
+    } else { hide($("#reader-highlight-bar")); return; }
     $("#reader-qa-selection-text").textContent = text.length > 100 ? text.slice(0, 100) + "…" : text;
     show($("#reader-qa-selection"));
   });
-  $("#btn-clear-selection").addEventListener("click", clearQASelection);
+  $("#btn-clear-selection").addEventListener("click", () => { clearQASelection(); hide($("#reader-highlight-bar")); });
+
+  // Highlight action bar
+  $("#btn-add-highlight").addEventListener("click", () => {
+    if (!_pendingHighlightText) return;
+    _currentHighlights.push({ text: _pendingHighlightText, note: "" });
+    _saveHighlights();
+    _refreshHighlightsDisplay();
+    hide($("#reader-highlight-bar"));
+    window.getSelection().removeAllRanges();
+  });
+
+  $("#btn-add-note").addEventListener("click", () => {
+    if (!_pendingHighlightText) return;
+    hide($("#reader-highlight-bar"));
+    const popup = $("#reader-note-popup");
+    $("#reader-note-input").value = "";
+    show(popup);
+    $("#reader-note-input").focus();
+  });
+
+  $("#btn-save-note").addEventListener("click", () => {
+    const note = $("#reader-note-input").value.trim();
+    _currentHighlights.push({ text: _pendingHighlightText, note });
+    _saveHighlights();
+    _refreshHighlightsDisplay();
+    hide($("#reader-note-popup"));
+    window.getSelection().removeAllRanges();
+  });
+
+  $("#btn-cancel-note").addEventListener("click", () => { hide($("#reader-note-popup")); });
+
+  // Click user highlight → show note/remove options
+  $("#reader-book-translated-content").addEventListener("click", (e) => {
+    const userMark = e.target.closest("mark.user-highlight");
+    if (!userMark) return;
+    const hlIdx = parseInt(userMark.dataset.hlIdx, 10);
+    if (isNaN(hlIdx) || hlIdx < 0 || hlIdx >= _currentHighlights.length) return;
+    const hl = _currentHighlights[hlIdx];
+    if (!hl) return;
+
+    const tip = $("#reader-ann-tooltip");
+    $("#ann-tooltip-src-text").textContent = hl.text;
+    $("#ann-tooltip-tgt-text").textContent = hl.note || "";
+    $("#ann-tooltip-note-text").innerHTML = "";
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "btn btn-sm btn-danger";
+    removeBtn.textContent = t("remove_highlight");
+    removeBtn.style.marginTop = "6px";
+    removeBtn.addEventListener("click", () => {
+      _currentHighlights.splice(hlIdx, 1);
+      _saveHighlights();
+      _refreshHighlightsDisplay();
+      hide(tip);
+    });
+    $("#ann-tooltip-note-text").appendChild(removeBtn);
+
+    if (hl.note) {
+      const noteP = document.createElement("p");
+      noteP.style.marginBottom = "4px";
+      noteP.textContent = hl.note;
+      $("#ann-tooltip-note-text").prepend(noteP);
+    }
+    show(tip);
+  });
 
   // AI Q&A
   $("#btn-reader-ask").addEventListener("click", askAI);

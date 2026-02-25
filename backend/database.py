@@ -88,6 +88,16 @@ _MIGRATIONS = [
     "ALTER TABLE strategies ADD COLUMN free_translation INTEGER DEFAULT 0",
     "ALTER TABLE strategies ADD COLUMN enable_annotations INTEGER DEFAULT 0",
     "ALTER TABLE chapters ADD COLUMN annotations TEXT DEFAULT ''",
+    "ALTER TABLE chapters ADD COLUMN highlights TEXT DEFAULT ''",
+    """CREATE TABLE IF NOT EXISTS qa_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id TEXT NOT NULL,
+        chapter_id TEXT DEFAULT '',
+        question TEXT NOT NULL,
+        answer TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    )""",
 ]
 
 
@@ -292,3 +302,37 @@ def update_strategy(project_id: str, **kwargs) -> None:
     vals = list(kwargs.values()) + [project_id]
     with _connect() as conn:
         conn.execute(f"UPDATE strategies SET {sets} WHERE project_id=?", vals)
+
+
+# ── Q&A History CRUD ────────────────────────────────────────────────────
+
+def save_qa(project_id: str, chapter_id: str, question: str, answer: str) -> int:
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO qa_history (project_id, chapter_id, question, answer, created_at) "
+            "VALUES (?,?,?,?,?)",
+            (project_id, chapter_id, question, answer, now),
+        )
+        return cur.lastrowid
+
+
+def get_qa_history(project_id: str, chapter_id: str | None = None) -> list[dict]:
+    with _connect() as conn:
+        if chapter_id:
+            rows = conn.execute(
+                "SELECT * FROM qa_history WHERE project_id=? AND chapter_id=? ORDER BY id",
+                (project_id, chapter_id),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM qa_history WHERE project_id=? ORDER BY id",
+                (project_id,),
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_qa_history(project_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM qa_history WHERE project_id=?", (project_id,))

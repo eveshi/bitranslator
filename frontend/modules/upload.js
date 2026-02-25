@@ -79,4 +79,27 @@ export function initUpload() {
   });
   $("#btn-upload").addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", () => { if (fileInput.files.length) uploadFile(fileInput.files[0]); });
+
+  // Import project
+  const importInput = $("#import-file-input");
+  $("#btn-import-project").addEventListener("click", () => importInput.click());
+  importInput.addEventListener("change", async () => {
+    if (!importInput.files.length) return;
+    const fd = new FormData();
+    fd.append("file", importInput.files[0]);
+    try {
+      $("#btn-import-project").textContent = "导入中…";
+      $("#btn-import-project").disabled = true;
+      const resp = await apiJson("/api/projects/import", { method: "POST", body: fd });
+      if (resp.project_id) {
+        await loadProjects();
+        _openProject?.(resp.project_id);
+      }
+    } catch (e) { alert("导入失败: " + e.message); }
+    finally {
+      $("#btn-import-project").textContent = t("import_project");
+      $("#btn-import-project").disabled = false;
+      importInput.value = "";
+    }
+  });
 }

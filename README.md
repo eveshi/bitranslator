@@ -24,7 +24,11 @@ BiTranslator is an AI-driven whole-book translation tool that works with **EPUB 
 - **EPUB Reader** – Built-in reader with side-by-side original/translation view, AI Q&A, and title editing
 - **Bilingual Titles** – Chapter titles displayed in both source and target languages in the editor and generated EPUBs
 - **Chapter Type Management** – Mark chapters as front matter, body chapters, or back matter; body chapters are auto-numbered
+- **Parallel Translation** – Multiple text chunks are translated concurrently within each chapter, dramatically speeding up translation
 - **EPUB Output** – Chapter-by-chapter EPUB output with stop/resume, individual downloads, and combined full-book EPUB
+- **Project Export/Import** – Export an entire project (analysis, strategy, translations, annotations, Q&A, highlights) as a single JSON file; share it with others who can import and browse in their own instance
+- **Persistent AI Q&A** – All reader Q&A conversations are saved and restored across sessions; downloadable as an EPUB appendix
+- **Highlights & Notes** – Highlight text and add personal notes directly in the reader; exportable as a standalone EPUB
 - **Multi-Model Support** – Google Gemini (native SDK), OpenAI, DeepSeek, Ollama (local), and any OpenAI-compatible API
 - **Bilingual UI** – Interface available in Chinese and English
 
@@ -177,7 +181,11 @@ BiTranslator 是一款 AI 驱动的整书翻译工具，支持 **EPUB 格式**�
 - **EPUB 阅读器** – 内置阅读器，支持原文/译文对照阅读、AI 问答、标题编辑
 - **双语标题** – 章节标题在编辑器和生成的 EPUB 中以原文/译文双语显示
 - **章节类型管理** – 可将章节标记为前言、正文或附录；正文章节自动编号
+- **并行翻译** – 每章内多个文本块同时发送翻译请求，大幅提升翻译速度
 - **EPUB 输出** – 逐章输出 EPUB，支持停止/恢复、单章下载、合并为完整译本
+- **项目导出/导入** – 将完整项目（分析、策略、译文、附注、问答、划线笔记）导出为 JSON 文件；可分享给他人在其本地实例中导入浏览
+- **AI 问答保存** – 阅读器内的所有 AI 问答对话自动保存，跨会话恢复；可下载为 EPUB 附录
+- **划线与笔记** – 在阅读器内直接划线和添加个人批注；可导出为独立 EPUB
 - **多模型支持** – Google Gemini（原生 SDK）、OpenAI、DeepSeek、Ollama（本地模型）及任意 OpenAI 兼容 API
 - **双语界面** – 支持中文和英文界面切换
 
@@ -383,6 +391,15 @@ The final right of interpretation of this statement belongs to the author of the
 
 <a id="changelog"></a>
 ## 更新日志 / Changelog
+
+#### 2026-02-25
+
+| 类型 | 内容 |
+|------|------|
+| feat | **Parallel translation**: translate multiple chunks concurrently within each chapter for dramatically faster translation speed / **并行翻译**：每章内多个文本块并发翻译，大幅提升翻译速度 |
+| feat | **Project export/import**: export entire project (analysis, strategy, translations, annotations, Q&A, highlights) as JSON; import on any instance / **项目导出/导入**：将完整项目导出为 JSON 文件，可在任意实例导入浏览 |
+| feat | **Persistent AI Q&A**: reader Q&A conversations are saved to database and restored across sessions; downloadable as EPUB / **AI 问答保存**：阅读器问答自动保存至数据库，跨会话恢复，可导出为 EPUB |
+| feat | **Highlights & notes**: highlight text and add personal notes in the reader; exportable as standalone EPUB / **划线与笔记**：在阅读器内划线和添加批注，可导出为独立 EPUB |
 
 #### 2026-02-24
 

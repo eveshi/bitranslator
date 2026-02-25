@@ -223,21 +223,51 @@ export function initReview() {
     showPanel("done"); showDone(state.reviewIsStopped);
   });
 
-  // Combine & download
-  $("#btn-combine-download").addEventListener("click", async () => {
-    try {
-      $("#btn-combine-download").textContent = t("merging"); $("#btn-combine-download").disabled = true;
-      await apiJson(`/api/projects/${state.currentProjectId}/combine`, { method: "POST" });
-      window.open(`/api/projects/${state.currentProjectId}/download`, "_blank");
-    } catch (e) { alert(t("save_failed") + ": " + e.message); }
-    finally { $("#btn-combine-download").textContent = t("combine_download"); $("#btn-combine-download").disabled = false; }
+  // ── Download / Export panel ──────────────────────────────────────────
+  const dlOverlay = $("#download-panel-overlay");
+  $("#btn-open-download-panel").addEventListener("click", () => show(dlOverlay));
+  $("#btn-close-download-panel").addEventListener("click", () => hide(dlOverlay));
+  dlOverlay.addEventListener("click", (e) => { if (e.target === dlOverlay) hide(dlOverlay); });
+
+  // Toggle annotation placement visibility
+  $("#dl-include-annotations").addEventListener("change", () => {
+    $("#dl-ann-placement-row").style.display = $("#dl-include-annotations").checked ? "" : "none";
   });
 
-  // Download annotations EPUB
-  $("#btn-download-annotations").addEventListener("click", async () => {
+  // Combine & download (with options)
+  $("#btn-combine-download").addEventListener("click", async () => {
+    const btn = $("#btn-combine-download");
     try {
-      window.open(`/api/projects/${state.currentProjectId}/download-annotations`, "_blank");
+      btn.textContent = t("merging"); btn.disabled = true;
+      const params = new URLSearchParams();
+      params.set("include_annotations", $("#dl-include-annotations").checked);
+      params.set("ann_placement", $("#dl-ann-placement").value);
+      params.set("include_highlights", $("#dl-include-highlights").checked);
+      params.set("include_qa", $("#dl-include-qa").checked);
+      await apiJson(`/api/projects/${state.currentProjectId}/combine?${params}`, { method: "POST" });
+      window.open(`/api/projects/${state.currentProjectId}/download`, "_blank");
     } catch (e) { alert(t("save_failed") + ": " + e.message); }
+    finally { btn.textContent = t("combine_download"); btn.disabled = false; }
+  });
+
+  // Individual downloads
+  $("#btn-download-annotations").addEventListener("click", () => {
+    window.open(`/api/projects/${state.currentProjectId}/download-annotations`, "_blank");
+  });
+  $("#btn-download-qa").addEventListener("click", () => {
+    window.open(`/api/projects/${state.currentProjectId}/download-qa`, "_blank");
+  });
+  $("#btn-download-highlights-epub").addEventListener("click", () => {
+    window.open(`/api/projects/${state.currentProjectId}/download-highlights?format=epub`, "_blank");
+  });
+  $("#btn-download-highlights-md").addEventListener("click", () => {
+    window.open(`/api/projects/${state.currentProjectId}/download-highlights?format=md`, "_blank");
+  });
+
+  // Export project (with highlight toggle)
+  $("#btn-export-project").addEventListener("click", () => {
+    const inclHL = $("#dl-export-highlights").checked;
+    window.open(`/api/projects/${state.currentProjectId}/export?include_highlights=${inclHL}`, "_blank");
   });
 
   // Resume translation
