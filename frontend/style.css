@@ -935,6 +935,33 @@ td input:focus { outline: none; }
   color: var(--text-dim);
 }
 
+.review-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.review-filter-bar label {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.btn-xs {
+  padding: 3px 10px;
+  font-size: 12px;
+  border-radius: 12px;
+}
+.review-filter-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+}
+.review-filter-btn.active {
+  background: var(--primary, #4a7dff);
+  color: #fff;
+  border-color: var(--primary, #4a7dff);
+}
+
 .review-chapter-list {
   display: flex;
   flex-direction: column;
@@ -1192,12 +1219,12 @@ td input:focus { outline: none; }
 #panel-reader.rt-light .reader-book-content { background: #ffffff; color: #1a1a1a; }
 #panel-reader.rt-light .reader-book-header { background: #f5f5f5; color: #555; border-color: #ddd; }
 #panel-reader.rt-light .reader-book-pane { border-color: #ddd; }
-#panel-reader.rt-light mark.ann-highlight { background: rgba(255, 200, 50, 0.45); }
+#panel-reader.rt-light mark.ann-highlight { background: rgba(80, 220, 100, 0.35); }
 
 #panel-reader.rt-sepia .reader-book-content { background: #f4ecd8; color: #3b3122; }
 #panel-reader.rt-sepia .reader-book-header { background: #ebe0c8; color: #6b5d47; border-color: #d4c5a9; }
 #panel-reader.rt-sepia .reader-book-pane { border-color: #d4c5a9; }
-#panel-reader.rt-sepia mark.ann-highlight { background: rgba(200, 160, 60, 0.35); }
+#panel-reader.rt-sepia mark.ann-highlight { background: rgba(80, 200, 100, 0.3); }
 
 .reader-book-view.single-pane {
   grid-template-columns: 1fr;
@@ -1509,17 +1536,18 @@ td input:focus { outline: none; }
   margin-top: 2px;
 }
 
-/* ── Annotations ─────────────────────────────────────────────────────── */
+/* ── Annotations (AI translator notes) — fluorescent green ───────────── */
 mark.ann-highlight {
-  background: rgba(255, 220, 100, 0.35);
-  border-bottom: 2px dotted var(--primary, #4a7dff);
+  background: rgba(100, 255, 120, 0.3);
+  color: inherit;
+  border-bottom: 2px dotted #2e7d32;
   cursor: pointer;
   padding: 0 2px;
   border-radius: 2px;
   transition: background 0.2s;
 }
 mark.ann-highlight:hover {
-  background: rgba(255, 200, 50, 0.55);
+  background: rgba(100, 255, 120, 0.5);
 }
 
 /* ── Annotation tooltip (single note at bottom of reader) ────────────── */
@@ -1643,16 +1671,59 @@ mark.ann-highlight:hover {
 .btn-danger:hover { background: #c62828; }
 
 /* ── User highlights & notes ───────────────────────────────────────── */
-mark.user-highlight {
-  background: rgba(255, 235, 59, 0.35);
-  border-radius: 2px;
-  padding: 0 1px;
-  cursor: default;
+/* User highlight/note tooltip */
+.reader-hl-tooltip {
+  position: sticky;
+  bottom: 0;
+  z-index: 150;
+  background: var(--bg-card);
+  color: var(--text);
+  border-top: 2px solid rgba(66, 165, 245, 0.6);
+  padding: 10px 14px;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.15);
+  animation: slideUpTip 0.2s ease;
+  font-size: 14px;
+  line-height: 1.6;
 }
-mark.user-highlight.has-note {
-  background: rgba(255, 183, 77, 0.4);
+.hl-tooltip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hl-tooltip-body .hl-note-label {
+  font-weight: 600;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.hl-tooltip-body .hl-note-text {
+  margin: 0;
+}
+.hl-tooltip-body .hl-imported-badge {
+  display: inline-block;
+  font-size: 11px;
+  background: rgba(66, 165, 245, 0.15);
+  color: var(--primary, #4a7dff);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+/* Plain highlight = orange-red underline, no background */
+mark.user-highlight {
+  background: transparent;
+  color: inherit;
+  border-bottom: 2.5px solid rgba(255, 87, 34, 0.7);
+  border-radius: 0;
+  padding: 0;
   cursor: pointer;
-  border-bottom: 1px dashed var(--accent);
+}
+/* Note = fluorescent blue highlight */
+mark.user-highlight.has-note {
+  background: rgba(66, 165, 245, 0.3);
+  color: inherit;
+  border-bottom: 2.5px solid rgba(66, 165, 245, 0.7);
+  cursor: pointer;
 }
 
 .reader-highlight-bar {
@@ -1667,12 +1738,17 @@ mark.user-highlight.has-note {
   box-shadow: 0 4px 16px rgba(0,0,0,0.18);
 }
 .btn-highlight-action {
-  font-size: 18px;
-  padding: 2px 8px;
+  font-size: 13px;
+  padding: 4px 10px;
   background: none;
-  border: none;
+  border: 1px solid var(--border);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+  white-space: nowrap;
 }
 .btn-highlight-action:hover { background: var(--bg-dim); }
 

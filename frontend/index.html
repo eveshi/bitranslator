@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BiTranslator – 智能全书翻译</title>
-  <link rel="stylesheet" href="style.css?v=21" />
+  <link rel="stylesheet" href="style.css?v=23" />
 </head>
 <body>
   <div id="app">
@@ -369,6 +369,13 @@
           <span class="hint" data-i18n="edit_titles_note">可设置前言/正文/附录类型，编辑双语标题</span>
         </div>
 
+        <div class="review-filter-bar">
+          <label data-i18n="filter_label">筛选：</label>
+          <button class="btn btn-xs review-filter-btn active" data-filter="all" data-i18n="filter_all">全部</button>
+          <button class="btn btn-xs review-filter-btn" data-filter="translated" data-i18n="filter_translated">已翻译</button>
+          <button class="btn btn-xs review-filter-btn" data-filter="untranslated" data-i18n="filter_untranslated">未翻译</button>
+        </div>
+
         <div class="review-chapter-list" id="review-chapter-list"></div>
 
         <div class="review-footer">
@@ -450,8 +457,8 @@
 
         <!-- Highlight action bar (shown on text selection) -->
         <div id="reader-highlight-bar" class="reader-highlight-bar hidden">
-          <button class="btn btn-sm btn-highlight-action" id="btn-add-highlight" title="Highlight">🖍️</button>
-          <button class="btn btn-sm btn-highlight-action" id="btn-add-note" title="Add Note">📝</button>
+          <button class="btn btn-sm btn-highlight-action" id="btn-add-highlight">🖍️ <span data-i18n="add_highlight">划线</span></button>
+          <button class="btn btn-sm btn-highlight-action" id="btn-add-note">📝 <span data-i18n="add_note">批注</span></button>
         </div>
 
         <!-- Note input popup -->
@@ -463,7 +470,7 @@
           </div>
         </div>
 
-        <!-- Single annotation tooltip (shown when clicking a highlight) -->
+        <!-- AI annotation tooltip (shown when clicking green annotation highlight) -->
         <div id="reader-ann-tooltip" class="reader-ann-tooltip hidden">
           <button class="btn-icon ann-tooltip-close" id="btn-close-ann-tooltip">✕</button>
           <div class="ann-tooltip-body">
@@ -471,6 +478,12 @@
             <p class="ann-tooltip-tgt"><span class="ann-label" data-i18n="annotation_tgt">译文</span>: <span id="ann-tooltip-tgt-text"></span></p>
             <p class="ann-tooltip-note" id="ann-tooltip-note-text"></p>
           </div>
+        </div>
+
+        <!-- User highlight/note tooltip (shown when clicking user highlights) -->
+        <div id="reader-hl-tooltip" class="reader-hl-tooltip hidden">
+          <button class="btn-icon ann-tooltip-close" id="btn-close-hl-tooltip">✕</button>
+          <div class="hl-tooltip-body" id="hl-tooltip-content"></div>
         </div>
 
         <!-- All annotations modal overlay -->
@@ -626,6 +639,6 @@
     </main>
   </div>
 
-  <script type="module" src="app.js?v=19"></script>
+  <script type="module" src="app.js?v=21"></script>
 </body>
 </html>

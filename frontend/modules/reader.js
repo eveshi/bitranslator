@@ -128,6 +128,7 @@ export async function loadReaderChapter(idx) {
     _currentAnnotations = annResp.annotations || [];
     _currentHighlights = hlResp.highlights || [];
     hide($("#reader-ann-tooltip"));
+    hide($("#reader-hl-tooltip"));
     hide($("#reader-highlight-bar"));
 
     _applyHighlights(transEl, _currentHighlights);
@@ -383,7 +384,7 @@ export function initReader() {
 
   $("#btn-cancel-note").addEventListener("click", () => { hide($("#reader-note-popup")); });
 
-  // Click user highlight → show note/remove options
+  // Click user highlight → show dedicated highlight/note tooltip
   $("#reader-book-translated-content").addEventListener("click", (e) => {
     const userMark = e.target.closest("mark.user-highlight");
     if (!userMark) return;
@@ -392,14 +393,31 @@ export function initReader() {
     const hl = _currentHighlights[hlIdx];
     if (!hl) return;
 
-    const tip = $("#reader-ann-tooltip");
-    $("#ann-tooltip-src-text").textContent = hl.text;
-    $("#ann-tooltip-tgt-text").textContent = hl.note || "";
-    $("#ann-tooltip-note-text").innerHTML = "";
+    const tip = $("#reader-hl-tooltip");
+    const body = $("#hl-tooltip-content");
+    body.innerHTML = "";
+
+    if (hl.imported) {
+      const badge = document.createElement("span");
+      badge.className = "hl-imported-badge";
+      badge.textContent = t("imported_note");
+      body.appendChild(badge);
+    }
+
+    if (hl.note) {
+      const label = document.createElement("span");
+      label.className = "hl-note-label";
+      label.textContent = t("user_note");
+      body.appendChild(label);
+      const noteP = document.createElement("p");
+      noteP.className = "hl-note-text";
+      noteP.textContent = hl.note;
+      body.appendChild(noteP);
+    }
 
     const removeBtn = document.createElement("button");
     removeBtn.className = "btn btn-sm btn-danger";
-    removeBtn.textContent = t("remove_highlight");
+    removeBtn.textContent = hl.note ? t("remove_note") : t("remove_highlight");
     removeBtn.style.marginTop = "6px";
     removeBtn.addEventListener("click", () => {
       _currentHighlights.splice(hlIdx, 1);
@@ -407,16 +425,13 @@ export function initReader() {
       _refreshHighlightsDisplay();
       hide(tip);
     });
-    $("#ann-tooltip-note-text").appendChild(removeBtn);
+    body.appendChild(removeBtn);
 
-    if (hl.note) {
-      const noteP = document.createElement("p");
-      noteP.style.marginBottom = "4px";
-      noteP.textContent = hl.note;
-      $("#ann-tooltip-note-text").prepend(noteP);
-    }
     show(tip);
   });
+
+  // Close user highlight tooltip
+  $("#btn-close-hl-tooltip").addEventListener("click", () => hide($("#reader-hl-tooltip")));
 
   // AI Q&A
   $("#btn-reader-ask").addEventListener("click", askAI);

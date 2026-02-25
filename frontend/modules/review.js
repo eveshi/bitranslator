@@ -29,9 +29,20 @@ export async function showReview(isStopped) {
   } catch (e) { console.error("showReview failed", e); }
 }
 
+let _reviewFilter = "all";
+
 export function renderReviewList() {
   const list = $("#review-chapter-list"); list.innerHTML = "";
-  for (const ch of state.reviewChapters) {
+  const chapters = state.reviewChapters.filter(ch => {
+    if (_reviewFilter === "translated") return ch.status === "translated";
+    if (_reviewFilter === "untranslated") return ch.status !== "translated";
+    return true;
+  });
+  if (chapters.length === 0) {
+    list.innerHTML = `<p class="hint" style="padding:12px">${t("no_chapters_match")}</p>`;
+    return;
+  }
+  for (const ch of chapters) {
     const ctype = ch.chapter_type || "chapter";
     const seq = ch.chapter_index + 1;
 
@@ -191,6 +202,16 @@ function _pollNameScan() {
 }
 
 export function initReview() {
+  // Review filter buttons
+  document.querySelectorAll(".review-filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".review-filter-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      _reviewFilter = btn.dataset.filter;
+      renderReviewList();
+    });
+  });
+
   // Name table overlay
   $("#btn-toggle-name-table").addEventListener("click", async () => {
     show($("#name-table-overlay"));
