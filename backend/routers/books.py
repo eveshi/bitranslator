@@ -162,6 +162,8 @@ async def list_chapters(project_id: str):
             status=c["status"],
             original_length=len(c.get("original_content") or ""),
             translated_length=len(c.get("translated_content") or ""),
+            translation_version=c.get("translation_version") or 0,
+            strategy_version_used=c.get("strategy_version_used") or 0,
         )
         for c in chapters
     ]

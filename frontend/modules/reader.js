@@ -113,7 +113,25 @@ export async function loadReaderChapter(idx) {
   origEl.innerHTML = "<p style='color:var(--text-dim)'>...</p>";
   transEl.innerHTML = "<p style='color:var(--text-dim)'>...</p>";
 
+  // If this chapter is currently being retranslated, keep showing the placeholder
+  if (state.retranslatingChapterId === ch.id) {
+    try {
+      const orig = await apiJson(`/api/projects/${state.currentProjectId}/chapters/${ch.id}/original`);
+      origEl.innerHTML = textToHtml(orig.text || "", ch.title);
+    } catch (_) {}
+    transEl.innerHTML = "<p style='color:var(--text-dim)'>正在根据反馈重新翻译，请稍候…</p>";
+    return;
+  }
+
   try {
+    // Fetch fresh chapter status from API to avoid stale cache
+    const freshChapters = await apiJson(`/api/projects/${state.currentProjectId}/chapters`);
+    const freshCh = freshChapters.find(c => c.id === ch.id);
+    if (freshCh) {
+      state.readerChapters[idx] = freshCh;
+      Object.assign(ch, freshCh);
+    }
+
     const [orig, trans, annResp, hlResp] = await Promise.all([
       apiJson(`/api/projects/${state.currentProjectId}/chapters/${ch.id}/original`),
       apiJson(`/api/projects/${state.currentProjectId}/chapters/${ch.id}/translation`),
@@ -264,11 +282,72 @@ function _initReaderSettings() {
   }
 }
 
+function _toggleImmersive(force) {
+  const on = force !== undefined ? force : !state.immersiveMode;
+  state.immersiveMode = on;
+  document.body.classList.toggle("immersive", on);
+
+  const btn = $("#btn-reader-immersive");
+  if (btn) {
+    // In immersive mode the button text is rendered via data-icon + CSS
+    // but update data-icon for the exit state
+    btn.setAttribute("data-icon", on ? "✕" : "📖");
+    btn.textContent = on ? "✕ " + t("exit_immersive") : "📖 " + t("immersive_mode");
+  }
+
+  const aiFab = $("#immersive-ai-fab");
+  const menuFab = $("#immersive-menu-fab");
+  const qa = $("#reader-qa");
+  if (on) {
+    if (aiFab) show(aiFab);
+    if (menuFab) show(menuFab);
+    if (qa) qa.classList.remove("qa-visible");
+  } else {
+    if (aiFab) hide(aiFab);
+    if (menuFab) hide(menuFab);
+    if (qa) qa.classList.remove("qa-visible");
+    const tb = $(".reader-toolbar");
+    if (tb) tb.classList.remove("toolbar-visible");
+  }
+}
+
 export function initReader() {
   _initReaderSettings();
 
-  // Exit reader → back to review
-  $("#btn-reader-exit").addEventListener("click", () => { showPanel("review"); showReview(state.reviewIsStopped); });
+  // Exit reader → back to review (also exit immersive)
+  $("#btn-reader-exit").addEventListener("click", () => {
+    if (state.immersiveMode) _toggleImmersive(false);
+    showPanel("review"); showReview(state.reviewIsStopped);
+  });
+
+  // Immersive mode
+  $("#btn-reader-immersive")?.addEventListener("click", () => _toggleImmersive());
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && state.immersiveMode) _toggleImmersive(false);
+  });
+
+  // Floating AI chat button (immersive mode)
+  $("#immersive-ai-fab")?.addEventListener("click", () => {
+    const qa = $("#reader-qa");
+    if (qa) qa.classList.toggle("qa-visible");
+  });
+
+  // Mobile: menu fab toggles toolbar
+  $("#immersive-menu-fab")?.addEventListener("click", () => {
+    const tb = $(".reader-toolbar");
+    if (tb) tb.classList.toggle("toolbar-visible");
+  });
+
+  // Mobile: close toolbar when clicking outside
+  document.addEventListener("click", (e) => {
+    if (!state.immersiveMode || window.innerWidth >= 768) return;
+    const tb = $(".reader-toolbar");
+    if (!tb || !tb.classList.contains("toolbar-visible")) return;
+    if (tb.contains(e.target)) return;
+    if (e.target.closest(".immersive-menu-fab") || e.target.closest(".immersive-ai-fab")) return;
+    if (e.target.closest(".modal-overlay") || e.target.closest(".reader-qa")) return;
+    tb.classList.remove("toolbar-visible");
+  });
 
   // Navigation
   $("#btn-reader-prev").addEventListener("click", () => {
@@ -437,32 +516,186 @@ export function initReader() {
   $("#btn-reader-ask").addEventListener("click", askAI);
   $("#reader-qa-question").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askAI(); } });
 
-  // Retranslate from reader
+  // Retranslate from reader — open feedback dialog with current strategy options
   $("#btn-reader-retranslate").addEventListener("click", async () => {
     if (!state.readerCurrentChapterId) return;
-    if (!confirm("确认重新翻译本章？")) return;
-    const btn = $("#btn-reader-retranslate"); btn.disabled = true; btn.textContent = "🔄 翻译中…";
-    $("#reader-book-translated-content").innerHTML = "<p style='color:var(--text-dim)'>正在重新翻译，请稍候…</p>";
+    $("#retranslate-feedback").value = "";
+    $("#retranslate-update-strategy").checked = true;
     try {
-      await apiJson(`/api/projects/${state.currentProjectId}/chapters/${state.readerCurrentChapterId}/retranslate`, { method: "POST" });
+      const s = await apiJson(`/api/projects/${state.currentProjectId}/strategy`);
+      $("#rt-enable-annotations").checked = !!s.enable_annotations;
+      $("#rt-annotate-terms").checked = !!s.annotate_terms;
+      $("#rt-annotate-names").checked = !!s.annotate_names;
+      $("#rt-free-translation").checked = !!s.free_translation;
+      $("#rt-annotation-density").value = s.annotation_density || "normal";
+      const dRow = $("#rt-density-row");
+      if (dRow) { if (s.enable_annotations) show(dRow); else hide(dRow); }
+    } catch (_) {}
+    show($("#retranslate-overlay"));
+  });
+
+  $("#btn-close-retranslate-modal").addEventListener("click", () => hide($("#retranslate-overlay")));
+  $("#btn-cancel-retranslate").addEventListener("click", () => hide($("#retranslate-overlay")));
+
+  // Toggle density visibility in retranslate dialog
+  $("#rt-enable-annotations")?.addEventListener("change", () => {
+    const dRow = $("#rt-density-row");
+    if (dRow) { if ($("#rt-enable-annotations").checked) show(dRow); else hide(dRow); }
+  });
+
+  $("#btn-confirm-retranslate").addEventListener("click", async () => {
+    const feedback = $("#retranslate-feedback").value.trim();
+    if (!feedback) { alert(t("retranslate_placeholder")); return; }
+    const updateStrategy = $("#retranslate-update-strategy").checked;
+    const strategyOverrides = {
+      enable_annotations: $("#rt-enable-annotations").checked,
+      annotate_terms: $("#rt-annotate-terms").checked,
+      annotate_names: $("#rt-annotate-names").checked,
+      free_translation: $("#rt-free-translation").checked,
+      annotation_density: $("#rt-annotation-density").value,
+    };
+    hide($("#retranslate-overlay"));
+
+    const retranslateChId = state.readerCurrentChapterId;
+    // Record current version so we can detect when a NEW translation finishes
+    const curCh = state.readerChapters[state.readerCurrentIdx];
+    const versionBefore = curCh?.translation_version ?? 0;
+    state.retranslatingChapterId = retranslateChId;
+    const btn = $("#btn-reader-retranslate"); btn.disabled = true; btn.textContent = "🔄 翻译中…";
+    $("#reader-book-translated-content").innerHTML = "<p style='color:var(--text-dim)'>正在根据反馈重新翻译，请稍候…</p>";
+    try {
+      await apiJson(`/api/projects/${state.currentProjectId}/chapters/${retranslateChId}/retranslate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback, update_strategy: updateStrategy, strategy_overrides: strategyOverrides }),
+      });
+      let sawTranslating = false;
       const timer = setInterval(async () => {
         try {
           const chapters = await apiJson(`/api/projects/${state.currentProjectId}/chapters`);
-          const ch = chapters.find(c => c.id === state.readerCurrentChapterId);
-          if (!ch) { clearInterval(timer); return; }
-          if (ch.status === "translated") {
+          const ch = chapters.find(c => c.id === retranslateChId);
+          if (!ch) { clearInterval(timer); state.retranslatingChapterId = null; return; }
+
+          if (ch.status === "translating") sawTranslating = true;
+
+          // Only accept "translated" if we've seen "translating" first
+          // OR the translation_version has actually incremented
+          const versionNow = ch.translation_version ?? 0;
+          const versionChanged = versionNow > versionBefore;
+
+          if (ch.status === "translated" && (sawTranslating || versionChanged)) {
             clearInterval(timer);
+            state.retranslatingChapterId = null;
             state.readerChapters = chapters; state.reviewChapters = chapters;
             loadReaderChapter(state.readerCurrentIdx);
             btn.disabled = false; btn.textContent = "🔄 重新翻译本章";
-          } else if (ch.status === "pending") {
+          } else if (ch.status === "pending" && sawTranslating) {
             clearInterval(timer);
+            state.retranslatingChapterId = null;
             alert("重新翻译失败，请重试。"); btn.disabled = false; btn.textContent = "🔄 重新翻译本章";
           }
         } catch (e) { console.error("poll retranslate error", e); }
       }, 3000);
     } catch (e) {
+      state.retranslatingChapterId = null;
       alert("重新翻译失败: " + e.message); btn.disabled = false; btn.textContent = "🔄 重新翻译本章";
     }
   });
+
+  // Version history
+  $("#btn-reader-versions").addEventListener("click", async () => {
+    if (!state.readerCurrentChapterId) return;
+    await _loadVersionHistory();
+    show($("#versions-overlay"));
+  });
+
+  $("#btn-close-versions-modal").addEventListener("click", () => hide($("#versions-overlay")));
+}
+
+async function _loadVersionHistory() {
+  const list = $("#versions-list");
+  const compare = $("#version-compare");
+  hide(compare);
+  list.innerHTML = "<p style='color:var(--text-dim)'>加载中…</p>";
+
+  try {
+    const versions = await apiJson(
+      `/api/projects/${state.currentProjectId}/chapters/${state.readerCurrentChapterId}/versions`
+    );
+    const ch = state.readerChapters[state.readerCurrentIdx];
+    const currentVer = ch?.translation_version || 0;
+
+    if (!versions.length) {
+      list.innerHTML = `<p class="hint">${t("ver_no_versions")}</p>`;
+      return;
+    }
+
+    list.innerHTML = "";
+    for (const v of versions) {
+      const row = document.createElement("div");
+      row.className = "version-row" + (v.version === currentVer ? " active" : "");
+      const isCurrent = v.version === currentVer;
+      const label = `v${v.version}`;
+      const date = v.created_at ? new Date(v.created_at).toLocaleString() : "";
+      const stratLabel = v.strategy_version ? `${t("ver_strategy").replace("{n}", v.strategy_version)}` : "";
+      const feedbackHtml = v.feedback ? `<div class="ver-feedback">${t("ver_feedback")}${esc(v.feedback)}</div>` : "";
+
+      row.innerHTML = `
+        <div class="ver-info">
+          <span class="ver-label">${label}${isCurrent ? ` <span class="ver-badge">${t("ver_current")}</span>` : ""}</span>
+          <span class="ver-meta">${date}${stratLabel ? " · " + stratLabel : ""}</span>
+          ${feedbackHtml}
+        </div>
+        <div class="ver-actions">
+          ${!isCurrent ? `<button class="btn btn-sm ver-btn-compare" data-ver="${v.version}">${t("ver_compare")}</button>` : ""}
+          ${!isCurrent ? `<button class="btn btn-sm btn-primary ver-btn-restore" data-ver="${v.version}">${t("ver_restore")}</button>` : ""}
+        </div>`;
+      list.appendChild(row);
+    }
+
+    list.querySelectorAll(".ver-btn-compare").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const ver = parseInt(btn.dataset.ver);
+        await _showVersionCompare(ver);
+      });
+    });
+
+    list.querySelectorAll(".ver-btn-restore").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const ver = parseInt(btn.dataset.ver);
+        if (!confirm(t("confirm_restore_ver").replace("{n}", ver))) return;
+        try {
+          await apiJson(`/api/projects/${state.currentProjectId}/chapters/${state.readerCurrentChapterId}/versions/${ver}/restore`, { method: "POST" });
+          const chapters = await apiJson(`/api/projects/${state.currentProjectId}/chapters`);
+          state.readerChapters = chapters; state.reviewChapters = chapters;
+          loadReaderChapter(state.readerCurrentIdx);
+          await _loadVersionHistory();
+        } catch (e) { alert("Restore failed: " + e.message); }
+      });
+    });
+  } catch (e) {
+    list.innerHTML = `<p class="hint">${t("ver_no_versions")}</p>`;
+  }
+}
+
+async function _showVersionCompare(version) {
+  const compare = $("#version-compare");
+  show(compare);
+
+  try {
+    const vData = await apiJson(
+      `/api/projects/${state.currentProjectId}/chapters/${state.readerCurrentChapterId}/versions/${version}`
+    );
+    const currentTrans = await apiJson(
+      `/api/projects/${state.currentProjectId}/chapters/${state.readerCurrentChapterId}/translation`
+    );
+    const ch = state.readerChapters[state.readerCurrentIdx];
+
+    $("#version-compare-label-current").textContent = `当前 v${ch?.translation_version ?? 0}`;
+    $("#version-compare-label-old").textContent = `v${version}`;
+    $("#version-compare-current").textContent = currentTrans.text || "";
+    $("#version-compare-old").textContent = vData.translated_content || "";
+  } catch (e) {
+    console.error("Version compare failed", e);
+  }
 }

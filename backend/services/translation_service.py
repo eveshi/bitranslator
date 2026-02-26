@@ -51,19 +51,42 @@ its significance in context.
 _OUTPUT_RULES_PLAIN = \
     "• Output ONLY the translated text, no commentary, translator notes, or explanations."
 
-_OUTPUT_RULES_ANNOTATED = """\
-• Output the complete translated text first.
-• AFTER the COMPLETE translation, output a line containing EXACTLY: ===ANNOTATIONS===
-• Then output a JSON array of translator's notes for difficult/nuanced passages.
-  Each element: {{"src": "<short original excerpt ≤30 chars>", \
-"tgt": "<corresponding translated excerpt ≤30 chars>", \
-"note": "<explanation: why you translated it this way, literal meaning, \
-cultural context, alternative readings, etc.>"}}
-• Only annotate passages that are: long/complex sentences, idioms, culturally specific \
-references, ambiguous phrases, or where the translation departs significantly from the \
-literal meaning. Aim for 3-8 notes per text chunk — NOT every sentence.
-• The full translation MUST appear BEFORE the ===ANNOTATIONS=== line.
-• If nothing warrants annotation, output ===ANNOTATIONS=== followed by []."""
+_ANNOTATION_DENSITY = {
+    "verbose": (
+        "Be generous with annotations. Annotate most sentences that have any nuance, "
+        "literary device, cultural reference, or translation choice worth explaining. "
+        "Aim for 8-15 notes per text chunk. Think of a reader who wants to deeply "
+        "understand every translation decision."
+    ),
+    "normal": (
+        "Only annotate passages that are: long/complex sentences, idioms, culturally "
+        "specific references, ambiguous phrases, or where the translation departs "
+        "significantly from the literal meaning. Aim for 3-8 notes per text chunk — "
+        "NOT every sentence."
+    ),
+    "minimal": (
+        "Be very selective. Only annotate the most critical passages: major cultural "
+        "references a reader would otherwise miss, significant translation departures, "
+        "or truly ambiguous phrases. Aim for 1-3 notes per text chunk at most."
+    ),
+}
+
+def _get_annotation_rules(density: str = "normal") -> str:
+    density_instruction = _ANNOTATION_DENSITY.get(density, _ANNOTATION_DENSITY["normal"])
+    return (
+        "• Output the complete translated text first.\n"
+        "• AFTER the COMPLETE translation, output a line containing EXACTLY: ===ANNOTATIONS===\n"
+        "• Then output a JSON array of translator's notes for difficult/nuanced passages.\n"
+        '  Each element: {{"src": "<short original excerpt ≤30 chars>", '
+        '"tgt": "<corresponding translated excerpt ≤30 chars>", '
+        '"note": "<explanation: why you translated it this way, literal meaning, '
+        'cultural context, alternative readings, etc.>"}}\n'
+        f"• {density_instruction}\n"
+        "• The full translation MUST appear BEFORE the ===ANNOTATIONS=== line.\n"
+        "• If nothing warrants annotation, output ===ANNOTATIONS=== followed by []."
+    )
+
+_OUTPUT_RULES_ANNOTATED = _get_annotation_rules("normal")
 
 TRANSLATION_USER = """\
 {context_section}\
@@ -94,12 +117,17 @@ _ANNOTATION_SEPARATOR = "===ANNOTATIONS==="
 
 def _build_system_prompt(project: dict, strategy: dict) -> str:
     enable_ann = strategy.get("enable_annotations", False)
+    if enable_ann:
+        density = strategy.get("annotation_density", "normal")
+        output_rules = _get_annotation_rules(density)
+    else:
+        output_rules = _OUTPUT_RULES_PLAIN
     return _TRANSLATION_SYSTEM_BASE.format(
         source_lang=project["source_language"],
         target_lang=project["target_language"],
         strategy_text=_build_strategy_text(strategy),
         glossary_text=_build_glossary_text(strategy),
-        output_rules=_OUTPUT_RULES_ANNOTATED if enable_ann else _OUTPUT_RULES_PLAIN,
+        output_rules=output_rules,
     )
 
 
@@ -383,6 +411,8 @@ async def _translate_chunk_with_continuation(
 async def translate_chapter(
     project_id: str,
     chapter_id: str,
+    feedback: str = "",
+    strategy_overrides: dict | None = None,
 ) -> str:
     """Translate a single chapter, save per-chapter EPUB, return translated text."""
     project = db.get_project(project_id)
@@ -393,9 +423,20 @@ async def translate_chapter(
     if not project or not strategy or not chapter:
         raise ValueError("Missing project, strategy, or chapter data")
 
+    # Apply per-chapter strategy overrides if provided
+    if strategy_overrides:
+        strategy = {**strategy, **strategy_overrides}
+
     db.update_chapter(chapter_id, status="translating")
 
     system_prompt = _build_system_prompt(project, strategy)
+    if feedback:
+        system_prompt += (
+            "\n\n── User Feedback on Previous Translation ──\n"
+            "The user was NOT satisfied with the previous translation of this chapter. "
+            "Please pay special attention to the following feedback and adjust accordingly:\n"
+            f"{feedback}\n"
+        )
     enable_ann = strategy.get("enable_annotations", False)
 
     context_section = _build_context_section(all_chapters, chapter["chapter_index"])
@@ -479,8 +520,21 @@ async def translate_chapter(
 
     annotations_str = json.dumps(all_annotations, ensure_ascii=False) if all_annotations else ""
     translated_title = _extract_translated_title(full_translation, chapter["title"])
+    # If extraction returned nothing, preserve the existing translated title
+    if not translated_title and chapter.get("translated_title"):
+        translated_title = chapter["translated_title"]
+
+    cur_ver = (chapter.get("translation_version") or 0) + 1
+    strategy_ver = strategy.get("version", 0)
     db.update_chapter(chapter_id, translated_content=full_translation, status="translated",
-                      translated_title=translated_title, annotations=annotations_str)
+                      translated_title=translated_title, annotations=annotations_str,
+                      translation_version=cur_ver, strategy_version_used=strategy_ver)
+
+    db.save_translation_version(
+        project_id, chapter_id, cur_ver,
+        full_translation, translated_title, annotations_str,
+        feedback=feedback, strategy_version=strategy_ver,
+    )
 
     display_title = _bilingual_title(chapter["title"], translated_title)
     epub_path = _chapter_epub_path(project, chapter)
@@ -572,11 +626,24 @@ async def translate_sample(project_id: str, chapter_index: int | None = None) ->
 
     translated = _strip_chunk_header(translated, chapter["title"], 0, 1)
     translated_title = _extract_translated_title(translated, chapter["title"])
+    if not translated_title and chapter.get("translated_title"):
+        translated_title = chapter["translated_title"]
+
+    cur_ver = (chapter.get("translation_version") or 0) + 1
+    strategy_ver = strategy.get("version", 0)
+    ann_str = annotations_str if enable_ann else ""
     db.update_chapter(chapter["id"], translated_content=translated, status="translated",
-                      translated_title=translated_title)
+                      translated_title=translated_title,
+                      translation_version=cur_ver, strategy_version_used=strategy_ver)
+    db.save_translation_version(
+        project_id, chapter["id"], cur_ver,
+        translated, translated_title, ann_str,
+        strategy_version=strategy_ver, is_sample=True,
+    )
     db.update_project(project_id, status="sample_ready",
                       sample_chapter_index=idx)
-    log.info("Sample translation done (chapter %d): %d chars translated", idx + 1, len(translated))
+    log.info("Sample translation v%d done (chapter %d): %d chars translated",
+             cur_ver, idx + 1, len(translated))
     return translated
 
 

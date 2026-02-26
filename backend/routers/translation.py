@@ -15,6 +15,8 @@ from ..models import (
     AnalysisOut, StrategyOut, StrategyUpdate, TranslationProgress,
     FeedbackRequest, LLMSettings, TranslateRangeRequest,
     AskAboutTranslationRequest, UpdateChapterTitleRequest, BatchUpdateTitlesRequest,
+    RetranslateFeedbackRequest, StrategyVersionOut, TranslationVersionOut,
+    StrategyTemplateCreate, StrategyTemplateOut,
 )
 from ..config import settings
 from ..services import analysis_service, strategy_service, translation_service, llm_service
@@ -163,7 +165,10 @@ async def update_strategy(project_id: str, update: StrategyUpdate):
         raise HTTPException(404, "Strategy not found")
     fields = {k: v for k, v in update.model_dump().items() if v is not None}
     if fields:
-        db.save_strategy(project_id, {**s, **fields})
+        merged = {**s, **fields}
+        cur_ver = s.get("version", 0)
+        merged["version"] = cur_ver
+        db.save_strategy(project_id, merged)
     return {"ok": True}
 
 
@@ -179,6 +184,167 @@ async def _run_refine_strategy(project_id: str, feedback: str):
         await strategy_service.regenerate_strategy(project_id, feedback)
     except Exception as e:
         log.exception("Strategy refinement failed for %s", project_id)
+        db.update_project(project_id, status="error", error_message=str(e))
+
+
+# ── Strategy Version History ─────────────────────────────────────────────
+
+@router.get("/projects/{project_id}/strategy/versions")
+async def list_strategy_versions(project_id: str):
+    versions = db.get_strategy_versions(project_id)
+    return [
+        StrategyVersionOut(
+            id=v["id"], version=v["version"],
+            feedback=v.get("feedback") or "",
+            created_at=v.get("created_at") or "",
+        )
+        for v in versions
+    ]
+
+
+@router.get("/projects/{project_id}/strategy/versions/{version}")
+async def get_strategy_version(project_id: str, version: int):
+    v = db.get_strategy_version(project_id, version)
+    if not v:
+        raise HTTPException(404, "Strategy version not found")
+    return v
+
+
+@router.post("/projects/{project_id}/strategy/versions/{version}/restore")
+async def restore_strategy_version(project_id: str, version: int):
+    v = db.get_strategy_version(project_id, version)
+    if not v:
+        raise HTTPException(404, "Strategy version not found")
+    data = v["data"]
+    data["version"] = version
+    db.save_strategy(project_id, data)
+    return {"ok": True, "version": version}
+
+
+# ── Translation Version History ──────────────────────────────────────────
+
+@router.get("/projects/{project_id}/chapters/{chapter_id}/versions")
+async def list_translation_versions(project_id: str, chapter_id: str):
+    versions = db.get_translation_versions(project_id, chapter_id)
+    return [
+        TranslationVersionOut(
+            id=v["id"], version=v["version"],
+            translated_title=v.get("translated_title") or "",
+            feedback=v.get("feedback") or "",
+            strategy_version=v.get("strategy_version") or 0,
+            is_sample=bool(v.get("is_sample")),
+            created_at=v.get("created_at") or "",
+            content_length=len(v.get("translated_content") or ""),
+        )
+        for v in versions
+    ]
+
+
+@router.get("/projects/{project_id}/chapters/{chapter_id}/versions/{version}")
+async def get_translation_version_content(project_id: str, chapter_id: str, version: int):
+    v = db.get_translation_version(project_id, chapter_id, version)
+    if not v:
+        raise HTTPException(404, "Translation version not found")
+    return {
+        "version": v["version"],
+        "translated_content": v.get("translated_content") or "",
+        "translated_title": v.get("translated_title") or "",
+        "annotations": v.get("annotations") or "",
+        "feedback": v.get("feedback") or "",
+        "strategy_version": v.get("strategy_version") or 0,
+        "created_at": v.get("created_at") or "",
+    }
+
+
+@router.post("/projects/{project_id}/chapters/{chapter_id}/versions/{version}/restore")
+async def restore_translation_version(project_id: str, chapter_id: str, version: int):
+    v = db.get_translation_version(project_id, chapter_id, version)
+    if not v:
+        raise HTTPException(404, "Translation version not found")
+    db.update_chapter(
+        chapter_id,
+        translated_content=v.get("translated_content") or "",
+        translated_title=v.get("translated_title") or "",
+        annotations=v.get("annotations") or "",
+        status="translated",
+        translation_version=v["version"],
+        strategy_version_used=v.get("strategy_version") or 0,
+    )
+    return {"ok": True, "version": version}
+
+
+# ── Strategy Templates ───────────────────────────────────────────────────
+
+@router.get("/strategy-templates")
+async def list_strategy_templates():
+    templates = db.list_strategy_templates()
+    return [
+        StrategyTemplateOut(
+            id=t["id"], name=t["name"],
+            description=t.get("description") or "",
+            source_language=t.get("source_language") or "",
+            target_language=t.get("target_language") or "",
+            genre=t.get("genre") or "",
+            created_at=t.get("created_at") or "",
+        )
+        for t in templates
+    ]
+
+
+@router.post("/strategy-templates")
+async def save_as_template(project_id: str, req: StrategyTemplateCreate):
+    import uuid
+    s = db.get_strategy(project_id)
+    if not s:
+        raise HTTPException(404, "No strategy found for this project")
+    p = db.get_project(project_id)
+    a = db.get_analysis(project_id)
+    template_id = uuid.uuid4().hex[:12]
+    db.save_strategy_template(
+        template_id, req.name, req.description,
+        s, p.get("source_language", ""), p.get("target_language", ""),
+        a.get("genre", "") if a else "",
+    )
+    return {"ok": True, "id": template_id}
+
+
+@router.delete("/strategy-templates/{template_id}")
+async def delete_strategy_template(template_id: str):
+    db.delete_strategy_template(template_id)
+    return {"ok": True}
+
+
+@router.post("/projects/{project_id}/strategy/from-template")
+async def apply_template(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    template_id: str = Body(embed=True),
+):
+    t = db.get_strategy_template(template_id)
+    if not t:
+        raise HTTPException(404, "Template not found")
+    p = db.get_project(project_id)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    db.update_project(project_id, status="generating_strategy")
+    template_hint = (
+        f"Use the following strategy from a previous project as a STRONG reference. "
+        f"Adapt it to the current book while keeping its core approach:\n"
+        f"Approach: {t['data'].get('overall_approach','')}\n"
+        f"Tone & Style: {t['data'].get('tone_and_style','')}\n"
+        f"Cultural: {t['data'].get('cultural_adaptation','')}\n"
+        f"Special: {t['data'].get('special_considerations','')}\n"
+    )
+
+    background_tasks.add_task(_run_strategy_from_template, project_id, template_hint)
+    return {"ok": True, "message": "Generating strategy from template"}
+
+
+async def _run_strategy_from_template(project_id: str, template_hint: str):
+    try:
+        await strategy_service.generate_strategy(project_id, feedback=template_hint)
+    except Exception as e:
+        log.exception("Strategy from template failed for %s", project_id)
         db.update_project(project_id, status="error", error_message=str(e))
 
 
@@ -268,7 +434,12 @@ async def get_progress(project_id: str):
 # ── Download ────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/chapters/{chapter_id}/retranslate")
-async def retranslate_chapter(project_id: str, chapter_id: str, background_tasks: BackgroundTasks):
+async def retranslate_chapter(
+    project_id: str,
+    chapter_id: str,
+    background_tasks: BackgroundTasks,
+    req: RetranslateFeedbackRequest = RetranslateFeedbackRequest(),
+):
     p = db.get_project(project_id)
     ch = db.get_chapter(chapter_id)
     if not p or not ch or ch["project_id"] != project_id:
@@ -277,14 +448,47 @@ async def retranslate_chapter(project_id: str, chapter_id: str, background_tasks
     if not s:
         raise HTTPException(400, "No translation strategy found")
 
-    background_tasks.add_task(_run_retranslate_chapter, project_id, chapter_id)
+    # Snapshot current translation before overwriting (including v0)
+    if ch.get("translated_content"):
+        cur_ver = ch.get("translation_version") or 0
+        existing_versions = db.get_translation_versions(project_id, chapter_id)
+        already_saved = any(v["version"] == cur_ver for v in existing_versions)
+        if not already_saved:
+            db.save_translation_version(
+                project_id, chapter_id, cur_ver,
+                ch.get("translated_content") or "",
+                ch.get("translated_title") or "",
+                ch.get("annotations") or "",
+                feedback=req.feedback,
+                strategy_version=ch.get("strategy_version_used") or 0,
+            )
+
+    background_tasks.add_task(
+        _run_retranslate_chapter, project_id, chapter_id,
+        req.feedback, req.update_strategy, req.strategy_overrides,
+    )
     return {"ok": True, "message": f"Re-translating chapter: {ch['title']}"}
 
 
-async def _run_retranslate_chapter(project_id: str, chapter_id: str):
+async def _run_retranslate_chapter(
+    project_id: str, chapter_id: str,
+    feedback: str = "", update_strategy: bool = True,
+    strategy_overrides: dict | None = None,
+):
     try:
+        # Optionally refine strategy based on feedback
+        if feedback and update_strategy:
+            await strategy_service.regenerate_strategy(project_id, feedback)
+
+        # Apply per-chapter strategy overrides (annotation flags, style, etc.)
+        override_keys = {"enable_annotations", "annotate_terms", "annotate_names", "free_translation", "annotation_density"}
+        effective_overrides = {k: v for k, v in (strategy_overrides or {}).items() if k in override_keys}
+
         db.update_chapter(chapter_id, status="translating", translated_content="")
-        await translation_service.translate_chapter(project_id, chapter_id)
+        await translation_service.translate_chapter(
+            project_id, chapter_id, feedback=feedback,
+            strategy_overrides=effective_overrides if effective_overrides else None,
+        )
     except Exception as e:
         log.exception("Re-translation failed for chapter %s", chapter_id)
         db.update_chapter(chapter_id, status="pending")
@@ -667,6 +871,26 @@ async def translate_titles(project_id: str):
             updated += 1
 
     return {"ok": True, "updated": updated, "titles": translated_map}
+
+
+@router.post("/projects/{project_id}/chapters/{chapter_id}/translate-title")
+async def translate_single_title(project_id: str, chapter_id: str):
+    """Translate a single chapter's title."""
+    p = db.get_project(project_id)
+    ch = db.get_chapter(chapter_id)
+    if not p or not ch or ch["project_id"] != project_id:
+        raise HTTPException(404, "Chapter not found")
+
+    system = _TITLE_TRANSLATE_SYSTEM.format(
+        source_lang=p["source_language"],
+        target_lang=p["target_language"],
+    )
+    batch = [(ch["chapter_index"], ch["title"])]
+    result = await _translate_title_batch(system, batch)
+    tt = result.get(ch["chapter_index"], "")
+    if tt:
+        db.update_chapter(chapter_id, translated_title=tt)
+    return {"ok": True, "translated_title": tt}
 
 
 @router.patch("/projects/{project_id}/chapters/{chapter_id}/title")

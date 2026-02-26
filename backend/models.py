@@ -79,6 +79,8 @@ class ChapterOut(BaseModel):
     status: str
     original_length: int = 0
     translated_length: int = 0
+    translation_version: int = 0
+    strategy_version_used: int = 0
 
 
 class AnalysisOut(BaseModel):
@@ -110,7 +112,9 @@ class StrategyOut(BaseModel):
     annotate_names: bool = False
     free_translation: bool = False
     enable_annotations: bool = False
+    annotation_density: str = "normal"
     raw_strategy: str = ""
+    version: int = 0
 
 
 class StrategyUpdate(BaseModel):
@@ -142,6 +146,12 @@ class FeedbackRequest(BaseModel):
     feedback: str
 
 
+class RetranslateFeedbackRequest(BaseModel):
+    feedback: str = ""
+    update_strategy: bool = True
+    strategy_overrides: dict = {}
+
+
 class TranslateRangeRequest(BaseModel):
     start_chapter: int = 0    # 0-based chapter index, inclusive
     end_chapter: int = -1     # 0-based chapter index, inclusive; -1 = last chapter
@@ -165,3 +175,36 @@ class ChapterTitleInfo(BaseModel):
 
 class BatchUpdateTitlesRequest(BaseModel):
     titles: dict[str, ChapterTitleInfo]  # chapter_id -> title info
+
+
+class StrategyVersionOut(BaseModel):
+    id: int
+    version: int
+    feedback: str = ""
+    created_at: str = ""
+
+
+class TranslationVersionOut(BaseModel):
+    id: int
+    version: int
+    translated_title: str = ""
+    feedback: str = ""
+    strategy_version: int = 0
+    is_sample: bool = False
+    created_at: str = ""
+    content_length: int = 0
+
+
+class StrategyTemplateCreate(BaseModel):
+    name: str
+    description: str = ""
+
+
+class StrategyTemplateOut(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    source_language: str = ""
+    target_language: str = ""
+    genre: str = ""
+    created_at: str = ""

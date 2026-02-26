@@ -124,9 +124,31 @@ export function initTitles() {
     } catch (e) { alert(t("save_failed") + ": " + e.message); }
   });
 
-  // AI translate titles
+  // AI translate titles (batch — from title editor)
   $("#btn-ai-translate-titles").addEventListener("click", function () { aiTranslateTitles(this); });
-  $("#btn-quick-translate-titles").addEventListener("click", function () { aiTranslateTitles(this); });
+  // AI translate current chapter title only (from reader toolbar)
+  $("#btn-quick-translate-titles").addEventListener("click", async function () {
+    if (!state.readerCurrentChapterId) return;
+    const btn = this;
+    const origText = btn.textContent;
+    btn.disabled = true; btn.textContent = t("translating_titles");
+    try {
+      const res = await apiJson(
+        `/api/projects/${state.currentProjectId}/chapters/${state.readerCurrentChapterId}/translate-title`,
+        { method: "POST" },
+      );
+      if (res.translated_title) {
+        const chapters = await apiJson(`/api/projects/${state.currentProjectId}/chapters`);
+        state.readerChapters = chapters; state.reviewChapters = chapters;
+        loadReaderChapter(state.readerCurrentIdx);
+      }
+      btn.textContent = t("titles_translated");
+      setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 2000);
+    } catch (e) {
+      alert(t("save_failed") + ": " + e.message);
+      btn.textContent = origText; btn.disabled = false;
+    }
+  });
 
   // Auto-number: detect mode from existing body_numbers
   $("#btn-auto-number").addEventListener("click", () => {

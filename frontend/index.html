@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BiTranslator – 智能全书翻译</title>
-  <link rel="stylesheet" href="style.css?v=24" />
+  <link rel="stylesheet" href="style.css?v=30" />
 </head>
 <body>
   <div id="app">
@@ -258,6 +258,15 @@
                 <span data-i18n="enable_annotations">生成翻译附注：AI 在翻译时额外生成长难句/文化背景的意译分析注释，可在阅读器中查看</span>
               </label>
             </div>
+            <div class="annotation-density-row" id="annotation-density-row">
+              <label data-i18n="annotation_density">附注密度：</label>
+              <select id="strat-annotation-density">
+                <option value="verbose" data-i18n="density_verbose">详尽</option>
+                <option value="normal" selected data-i18n="density_normal">适中</option>
+                <option value="minimal" data-i18n="density_minimal">精简</option>
+              </select>
+              <span class="hint" id="density-hint" data-i18n="density_hint_normal">每段 3-8 条，标注关键翻译选择</span>
+            </div>
             <p class="hint" data-i18n="annotations_hint">附注会解释翻译选择、原文直译含义和文化背景，方便深度阅读对比。可在阅读器中切换显示，也可导出为 EPUB。</p>
           </div>
 
@@ -288,6 +297,33 @@
             <p class="hint">AI 会结合您的反馈和当前策略中的手动修改重新生成翻译策略。</p>
             <textarea id="strategy-feedback" rows="3" placeholder="例如：翻译风格应该更口语化；角色名全部音译；某些术语需要统一…"></textarea>
             <button class="btn" id="btn-regen-strategy">🔄 根据反馈重新生成策略</button>
+          </div>
+          <div class="strategy-version-section">
+            <div class="section-header-row">
+              <h3>📋 <span data-i18n="strategy_versions">策略版本历史</span></h3>
+              <span class="current-ver-badge" id="strategy-current-ver"></span>
+            </div>
+            <div id="strategy-versions-list" class="versions-list"></div>
+            <div id="strategy-version-preview" class="strategy-version-preview hidden">
+              <div class="preview-header">
+                <h4 id="strat-preview-title"></h4>
+                <button class="btn-icon" id="btn-close-strat-preview">✕</button>
+              </div>
+              <div class="preview-fields" id="strat-preview-fields"></div>
+              <div class="btn-row" style="margin-top:.5rem">
+                <button class="btn btn-primary btn-sm" id="btn-use-strat-version" data-i18n="ver_use">使用此版本</button>
+              </div>
+            </div>
+          </div>
+          <div class="strategy-template-section">
+            <h3>💾 <span data-i18n="strategy_templates">策略模板</span></h3>
+            <p class="hint" data-i18n="template_hint">保存当前策略为模板，以后可一键应用到其他书目。</p>
+            <div class="template-save-row">
+              <input type="text" id="template-name-input" placeholder="模板名称" class="template-input" />
+              <input type="text" id="template-desc-input" placeholder="备注说明（可选）" class="template-input" />
+              <button class="btn btn-sm" id="btn-save-template" data-i18n="save_as_template">💾 保存为模板</button>
+            </div>
+            <div id="template-list" class="template-list"></div>
           </div>
           <div class="sample-chapter-picker">
             <label>选择样章：第
@@ -393,27 +429,29 @@
       <!-- Reader panel -->
       <section id="panel-reader" class="panel">
         <div class="reader-toolbar">
-          <button class="btn btn-sm" id="btn-reader-exit" data-i18n="back_to_review">← 返回审阅</button>
+          <button class="btn btn-sm" id="btn-reader-exit" data-icon="↩" data-i18n="back_to_review">← 返回审阅</button>
           <div class="reader-nav">
-            <button class="btn btn-sm" id="btn-reader-prev" disabled data-i18n="prev_chapter">◀ 上一章</button>
+            <button class="btn btn-sm" id="btn-reader-prev" data-icon="◀" disabled data-i18n="prev_chapter">◀ 上一章</button>
             <span id="reader-nav-label" class="reader-nav-label"></span>
-            <button class="btn btn-sm" id="btn-reader-next" data-i18n="next_chapter">下一章 ▶</button>
+            <button class="btn btn-sm" id="btn-reader-next" data-icon="▶" data-i18n="next_chapter">下一章 ▶</button>
           </div>
+          <button class="btn btn-sm btn-immersive" id="btn-reader-immersive" data-icon="📖" data-i18n="immersive_mode" title="沉浸式阅读">📖 沉浸阅读</button>
           <div class="reader-toolbar-actions">
-            <button class="btn btn-danger btn-sm" id="btn-reader-retranslate" data-i18n="retranslate_this">🔄 重新翻译本章</button>
-            <label class="reader-toggle">
+            <button class="btn btn-danger btn-sm" id="btn-reader-retranslate" data-icon="🔄" data-i18n="retranslate_this">🔄 重新翻译本章</button>
+            <button class="btn btn-sm" id="btn-reader-versions" data-icon="📋" data-i18n="version_history">📋 版本</button>
+            <label class="reader-toggle" data-icon="📖">
               <input type="checkbox" id="reader-show-original" checked />
               <span data-i18n="show_original">显示原文</span>
             </label>
-            <label class="reader-toggle">
+            <label class="reader-toggle" data-icon="💡">
               <input type="checkbox" id="reader-show-annotations" />
               <span data-i18n="show_annotations">显示附注</span>
             </label>
-            <button class="btn btn-sm" id="btn-view-all-annotations" data-i18n="view_all_annotations">📝 查看所有附注</button>
-            <button class="btn btn-sm" id="btn-quick-translate-titles" data-i18n="ai_translate_titles_short">🤖 翻译标题</button>
-            <button class="btn btn-sm" id="btn-edit-titles" data-i18n="edit_chapter_titles">✏️ 编辑章节标题</button>
+            <button class="btn btn-sm" id="btn-view-all-annotations" data-icon="📝" data-i18n="view_all_annotations">📝 查看所有附注</button>
+            <button class="btn btn-sm" id="btn-quick-translate-titles" data-icon="🤖" data-i18n="ai_translate_titles_short">🤖 翻译标题</button>
+            <button class="btn btn-sm" id="btn-edit-titles" data-icon="✏️" data-i18n="edit_chapter_titles">✏️ 编辑章节标题</button>
             <div class="reader-settings-wrap">
-              <button class="btn btn-sm" id="btn-reader-settings">⚙️</button>
+              <button class="btn btn-sm" id="btn-reader-settings" data-icon="⚙️">⚙️</button>
               <div id="reader-settings-dropdown" class="reader-settings-dropdown hidden">
                 <div class="rset-group">
                   <label data-i18n="reader_height">阅读框高度</label>
@@ -486,6 +524,86 @@
           <div class="hl-tooltip-body" id="hl-tooltip-content"></div>
         </div>
 
+        <!-- Retranslation feedback modal -->
+        <div id="retranslate-overlay" class="modal-overlay hidden">
+          <div class="modal-content retranslate-modal">
+            <div class="modal-header">
+              <h3 data-i18n="retranslate_feedback_title">🔄 重新翻译 — 请提供修改建议</h3>
+              <button class="btn-icon" id="btn-close-retranslate-modal">✕</button>
+            </div>
+            <p class="hint" data-i18n="retranslate_feedback_hint">请描述当前翻译的问题或不足，AI 将结合您的反馈调整策略并重新翻译本章。</p>
+            <textarea id="retranslate-feedback" rows="4" data-i18n="retranslate_placeholder" placeholder="例如：语气不够正式；某些人名翻译错误；第三段漏译了关键信息…"></textarea>
+            <div class="retranslate-options">
+              <div class="checkbox-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="retranslate-update-strategy" checked>
+                  <span data-i18n="retranslate_update_strategy">同时更新翻译策略（推荐：让后续章节也受益于此反馈）</span>
+                </label>
+              </div>
+              <div class="checkbox-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="rt-enable-annotations">
+                  <span data-i18n="enable_annotations">生成翻译附注</span>
+                </label>
+              </div>
+              <div class="checkbox-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="rt-annotate-terms">
+                  <span data-i18n="rt_annotate_terms">标注术语/地名原文</span>
+                </label>
+              </div>
+              <div class="checkbox-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="rt-annotate-names">
+                  <span data-i18n="rt_annotate_names">标注人名原文</span>
+                </label>
+              </div>
+              <div class="checkbox-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="rt-free-translation">
+                  <span data-i18n="rt_free_translation">长难句优先意译</span>
+                </label>
+              </div>
+              <div class="annotation-density-row compact" id="rt-density-row">
+                <label data-i18n="annotation_density">附注密度：</label>
+                <select id="rt-annotation-density">
+                  <option value="verbose" data-i18n="density_verbose">详尽</option>
+                  <option value="normal" selected data-i18n="density_normal">适中</option>
+                  <option value="minimal" data-i18n="density_minimal">精简</option>
+                </select>
+              </div>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" id="btn-confirm-retranslate" data-i18n="submit_and_retranslate">提交反馈并重新翻译</button>
+              <button class="btn" id="btn-cancel-retranslate" data-i18n="cancel">取消</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Translation version history modal -->
+        <div id="versions-overlay" class="modal-overlay hidden">
+          <div class="modal-content versions-modal">
+            <div class="modal-header">
+              <h3 data-i18n="version_history_title">📋 翻译版本历史</h3>
+              <button class="btn-icon" id="btn-close-versions-modal">✕</button>
+            </div>
+            <div id="versions-list" class="versions-list"></div>
+            <div id="version-compare" class="version-compare hidden">
+              <h4 data-i18n="version_compare_title">版本对比</h4>
+              <div class="comparison">
+                <div class="comparison-col">
+                  <h5 id="version-compare-label-current">当前版本</h5>
+                  <div id="version-compare-current" class="text-display version-text"></div>
+                </div>
+                <div class="comparison-col">
+                  <h5 id="version-compare-label-old">历史版本</h5>
+                  <div id="version-compare-old" class="text-display version-text"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- All annotations modal overlay -->
         <div id="annotations-overlay" class="modal-overlay hidden">
           <div class="modal-content annotations-modal">
@@ -496,6 +614,10 @@
             <div id="annotations-modal-list" class="annotations-modal-list"></div>
           </div>
         </div>
+
+        <!-- Floating buttons (immersive mode only) -->
+        <button class="immersive-ai-fab hidden" id="immersive-ai-fab" title="AI 助手">💬</button>
+        <button class="immersive-menu-fab hidden" id="immersive-menu-fab" title="菜单">☰</button>
 
         <!-- AI Q&A -->
         <div class="reader-qa" id="reader-qa">
@@ -639,6 +761,6 @@
     </main>
   </div>
 
-  <script type="module" src="app.js?v=25"></script>
+  <script type="module" src="app.js?v=30"></script>
 </body>
 </html>

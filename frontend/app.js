@@ -59,8 +59,21 @@ async function navigateToStep(step) {
       case "done":     showPanel(step); await showDone(isStopped); break;
       case "reader":
         showPanel(step);
-        if (state.readerChapters.length) loadReaderChapter(state.readerCurrentIdx);
-        else await openProject(state.currentProjectId);
+        if (state.readerChapters.length) {
+          loadReaderChapter(state.readerCurrentIdx);
+        } else {
+          // Load chapters fresh instead of falling back to openProject (which may redirect to review)
+          const chapters = await apiJson(`/api/projects/${state.currentProjectId}/chapters`);
+          state.readerChapters = chapters;
+          state.reviewChapters = chapters;
+          const translated = chapters.filter(c => c.status === "translated");
+          if (translated.length) {
+            state.readerCurrentIdx = chapters.indexOf(translated[0]);
+            loadReaderChapter(state.readerCurrentIdx);
+          } else {
+            showPanel("review"); await showReview(isStopped);
+          }
+        }
         break;
       case "translate":
         if (project.status === "translating") { showPanel(step); startPolling(); }

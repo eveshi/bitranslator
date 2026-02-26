@@ -15,6 +15,8 @@ for translating this book from {source_lang} to {target_lang}.
 
 {custom_instructions}
 
+{feedback_section}
+
 Return your strategy as a JSON object with exactly these keys:
 - "overall_approach": string – translation philosophy (literal vs. free, domestication vs. \
 foreignization) and why it suits this book
@@ -30,7 +32,7 @@ register and formality guidelines
 Be specific and actionable. Each guideline should be clear enough for a translator to follow."""
 
 
-async def generate_strategy(project_id: str) -> dict:
+async def generate_strategy(project_id: str, feedback: str = "") -> dict:
     project = db.get_project(project_id)
     if not project:
         raise ValueError(f"Project {project_id} not found")
@@ -48,10 +50,19 @@ async def generate_strategy(project_id: str) -> dict:
             + existing_strategy["custom_instructions"]
         )
 
+    feedback_section = ""
+    if feedback:
+        feedback_section = (
+            "IMPORTANT – The user reviewed the previous strategy and gave this feedback. "
+            "You MUST address these concerns in the new strategy:\n"
+            + feedback
+        )
+
     system_prompt = STRATEGY_SYSTEM.format(
         source_lang=project["source_language"],
         target_lang=project["target_language"],
         custom_instructions=custom,
+        feedback_section=feedback_section,
     )
 
     themes = analysis.get("themes", [])
@@ -100,8 +111,10 @@ async def generate_strategy(project_id: str) -> dict:
     )
     strategy_data = result if isinstance(result, dict) else {"raw": result}
     strategy_data["raw_strategy"] = str(strategy_data)
-    if custom:
-        strategy_data["custom_instructions"] = custom
+
+    # Preserve user-entered custom_instructions (never overwrite with LLM output)
+    if existing_strategy and existing_strategy.get("custom_instructions"):
+        strategy_data["custom_instructions"] = existing_strategy["custom_instructions"]
 
     # Preserve user-set annotation flags across regeneration
     if existing_strategy:
@@ -109,21 +122,19 @@ async def generate_strategy(project_id: str) -> dict:
             if key in existing_strategy and key not in strategy_data:
                 strategy_data[key] = existing_strategy[key]
 
+    next_ver = (existing_strategy.get("version", 0)) + 1 if existing_strategy else 1
+    strategy_data["version"] = next_ver
+
     db.save_strategy(project_id, strategy_data)
+    db.save_strategy_version(project_id, next_ver, strategy_data, feedback=feedback)
     db.update_project(project_id, status="strategy_generated")
-    log.info("Strategy generated for project %s", project_id)
+    log.info("Strategy v%d generated for project %s", next_ver, project_id)
     return strategy_data
 
 
 async def regenerate_strategy(project_id: str, feedback: str) -> dict:
-    """Regenerate strategy incorporating user feedback."""
-    existing = db.get_strategy(project_id)
-    custom = existing.get("custom_instructions", "") if existing else ""
-    if feedback:
-        custom += f"\n\nUser feedback on previous strategy:\n{feedback}"
+    """Regenerate strategy incorporating user feedback.
 
-    data = dict(existing) if existing else {}
-    data["custom_instructions"] = custom
-    db.save_strategy(project_id, data)
-
-    return await generate_strategy(project_id)
+    Feedback is passed to the LLM prompt directly — NOT stored in custom_instructions.
+    """
+    return await generate_strategy(project_id, feedback=feedback)

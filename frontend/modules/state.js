@@ -13,4 +13,6 @@ export const state = {
   readerSelectedTranslation: "",
   readerCurrentChapterId: "",
   hasTranslatedChapters: false,
+  retranslatingChapterId: null,
+  immersiveMode: false,
 };

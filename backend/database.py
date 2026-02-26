@@ -98,6 +98,44 @@ _MIGRATIONS = [
         created_at TEXT NOT NULL,
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
     )""",
+    # Version control tables
+    "ALTER TABLE strategies ADD COLUMN version INTEGER DEFAULT 0",
+    "ALTER TABLE chapters ADD COLUMN strategy_version_used INTEGER DEFAULT 0",
+    "ALTER TABLE chapters ADD COLUMN translation_version INTEGER DEFAULT 0",
+    """CREATE TABLE IF NOT EXISTS strategy_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        data TEXT NOT NULL DEFAULT '{}',
+        feedback TEXT DEFAULT '',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    )""",
+    """CREATE TABLE IF NOT EXISTS translation_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id TEXT NOT NULL,
+        chapter_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        translated_content TEXT NOT NULL DEFAULT '',
+        translated_title TEXT DEFAULT '',
+        annotations TEXT DEFAULT '',
+        feedback TEXT DEFAULT '',
+        strategy_version INTEGER DEFAULT 0,
+        is_sample INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    )""",
+    """CREATE TABLE IF NOT EXISTS strategy_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        data TEXT NOT NULL DEFAULT '{}',
+        source_language TEXT DEFAULT '',
+        target_language TEXT DEFAULT '',
+        genre TEXT DEFAULT '',
+        created_at TEXT NOT NULL
+    )""",
+    "ALTER TABLE strategies ADD COLUMN annotation_density TEXT DEFAULT 'normal'",
 ]
 
 
@@ -132,6 +170,15 @@ def _json_loads(val: str | None) -> Any:
         return json.loads(val)
     except json.JSONDecodeError:
         return []
+
+
+def _json_loads_obj(val: str | None) -> Any:
+    if not val:
+        return {}
+    try:
+        return json.loads(val)
+    except json.JSONDecodeError:
+        return {}
 
 
 # ── Project CRUD ────────────────────────────────────────────────────────
@@ -170,6 +217,9 @@ def update_project(project_id: str, **kwargs) -> None:
 
 def delete_project(project_id: str) -> None:
     with _connect() as conn:
+        conn.execute("DELETE FROM translation_versions WHERE project_id=?", (project_id,))
+        conn.execute("DELETE FROM strategy_versions WHERE project_id=?", (project_id,))
+        conn.execute("DELETE FROM qa_history WHERE project_id=?", (project_id,))
         conn.execute("DELETE FROM chapters WHERE project_id=?", (project_id,))
         conn.execute("DELETE FROM analyses WHERE project_id=?", (project_id,))
         conn.execute("DELETE FROM strategies WHERE project_id=?", (project_id,))
@@ -253,14 +303,29 @@ def get_analysis(project_id: str) -> dict | None:
 
 # ── Strategy CRUD ───────────────────────────────────────────────────────
 
+def _clean_custom_instructions(text: str) -> str:
+    """Strip system-injected boilerplate from custom_instructions that leaked in from earlier bugs."""
+    import re
+    text = re.sub(
+        r"The user has provided the following custom translation instructions\."
+        r"\s*Incorporate them into your strategy:\s*",
+        "", text,
+    )
+    text = re.sub(r"\n*User feedback on previous strategy:\n.*", "", text, flags=re.DOTALL)
+    return text.strip()
+
+
 def save_strategy(project_id: str, data: dict) -> None:
+    clean_ci = _clean_custom_instructions(data.get("custom_instructions", ""))
+    cur_ver = data.get("version")
     with _connect() as conn:
         conn.execute(
             "INSERT OR REPLACE INTO strategies "
             "(project_id, overall_approach, tone_and_style, character_names, glossary, "
             "cultural_adaptation, special_considerations, custom_instructions, raw_strategy, "
-            "annotate_terms, annotate_names, free_translation, enable_annotations) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "annotate_terms, annotate_names, free_translation, enable_annotations, version, "
+            "annotation_density) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 project_id,
                 data.get("overall_approach", ""),
@@ -269,12 +334,14 @@ def save_strategy(project_id: str, data: dict) -> None:
                 json.dumps(data.get("glossary", []), ensure_ascii=False),
                 data.get("cultural_adaptation", ""),
                 data.get("special_considerations", ""),
-                data.get("custom_instructions", ""),
+                clean_ci,
                 data.get("raw_strategy", ""),
                 1 if data.get("annotate_terms") else 0,
                 1 if data.get("annotate_names") else 0,
                 1 if data.get("free_translation") else 0,
                 1 if data.get("enable_annotations") else 0,
+                cur_ver if cur_ver is not None else 0,
+                data.get("annotation_density", "normal"),
             ),
         )
 
@@ -291,6 +358,10 @@ def get_strategy(project_id: str) -> dict | None:
     d["annotate_names"] = bool(d.get("annotate_names", 0))
     d["free_translation"] = bool(d.get("free_translation", 0))
     d["enable_annotations"] = bool(d.get("enable_annotations", 0))
+    d["annotation_density"] = d.get("annotation_density") or "normal"
+    v = d.get("version")
+    d["version"] = v if v is not None else 0
+    d["custom_instructions"] = _clean_custom_instructions(d.get("custom_instructions") or "")
     return d
 
 
@@ -336,3 +407,142 @@ def get_qa_history(project_id: str, chapter_id: str | None = None) -> list[dict]
 def delete_qa_history(project_id: str) -> None:
     with _connect() as conn:
         conn.execute("DELETE FROM qa_history WHERE project_id=?", (project_id,))
+
+
+# ── Strategy Version CRUD ────────────────────────────────────────────────
+
+def save_strategy_version(project_id: str, version: int, data: dict, feedback: str = "") -> int:
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        # Prevent duplicates: if this version already exists, skip
+        existing = conn.execute(
+            "SELECT id FROM strategy_versions WHERE project_id=? AND version=?",
+            (project_id, version),
+        ).fetchone()
+        if existing:
+            return existing["id"]
+        cur = conn.execute(
+            "INSERT INTO strategy_versions (project_id, version, data, feedback, created_at) "
+            "VALUES (?,?,?,?,?)",
+            (project_id, version, json.dumps(data, ensure_ascii=False), feedback, now),
+        )
+        return cur.lastrowid
+
+
+def get_strategy_versions(project_id: str) -> list[dict]:
+    with _connect() as conn:
+        # Deduplicate: only return the latest entry per version number
+        rows = conn.execute(
+            "SELECT * FROM strategy_versions "
+            "WHERE project_id=? AND id IN ("
+            "  SELECT MAX(id) FROM strategy_versions WHERE project_id=? GROUP BY version"
+            ") ORDER BY version DESC",
+            (project_id, project_id),
+        ).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["data"] = _json_loads_obj(d.get("data"))
+        result.append(d)
+    return result
+
+
+def get_strategy_version(project_id: str, version: int) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM strategy_versions WHERE project_id=? AND version=?",
+            (project_id, version),
+        ).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    d["data"] = _json_loads_obj(d.get("data"))
+    return d
+
+
+# ── Translation Version CRUD ────────────────────────────────────────────
+
+def save_translation_version(
+    project_id: str, chapter_id: str, version: int,
+    translated_content: str, translated_title: str = "",
+    annotations: str = "", feedback: str = "",
+    strategy_version: int = 0, is_sample: bool = False,
+) -> int:
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO translation_versions "
+            "(project_id, chapter_id, version, translated_content, translated_title, "
+            "annotations, feedback, strategy_version, is_sample, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (project_id, chapter_id, version, translated_content, translated_title,
+             annotations, feedback, strategy_version, 1 if is_sample else 0, now),
+        )
+        return cur.lastrowid
+
+
+def get_translation_versions(project_id: str, chapter_id: str) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM translation_versions WHERE project_id=? AND chapter_id=? ORDER BY version DESC",
+            (project_id, chapter_id),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_translation_version(project_id: str, chapter_id: str, version: int) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM translation_versions WHERE project_id=? AND chapter_id=? AND version=?",
+            (project_id, chapter_id, version),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+# ── Strategy Template CRUD ───────────────────────────────────────────────
+
+def save_strategy_template(template_id: str, name: str, description: str,
+                           data: dict, source_lang: str, target_lang: str,
+                           genre: str) -> None:
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO strategy_templates "
+            "(id, name, description, data, source_language, target_language, genre, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (template_id, name, description, json.dumps(data, ensure_ascii=False),
+             source_lang, target_lang, genre, now),
+        )
+
+
+def list_strategy_templates() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM strategy_templates ORDER BY created_at DESC"
+        ).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["data"] = _json_loads_obj(d.get("data"))
+        result.append(d)
+    return result
+
+
+def get_strategy_template(template_id: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM strategy_templates WHERE id=?", (template_id,)
+        ).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    d["data"] = _json_loads_obj(d.get("data"))
+    return d
+
+
+def delete_strategy_template(template_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM strategy_templates WHERE id=?", (template_id,))

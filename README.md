@@ -18,17 +18,22 @@ BiTranslator is an AI-driven whole-book translation tool that works with **EPUB 
 - **User Control** – Edit the strategy, modify the glossary, specify character name translations, set the desired tone. Provide corrections at every step.
 - **Translation Style Preference** – Choose between faithful translation or free translation that prioritizes readability for complex sentences
 - **Translator's Annotations** – AI generates explanatory notes for difficult sentences, idioms, and cultural references alongside translation; viewable inline or in a dedicated panel; exportable as a standalone EPUB
+- **Annotation Density Control** – Choose between verbose (8–15 notes/chunk), normal (3–8), or minimal (1–3) annotation density to match your reading preference
 - **Sample Review** – Translates a sample chapter for preview; refine the strategy based on your feedback before full translation
 - **Chapter Range Selection** – Choose which chapters to translate (e.g., chapters 3–10); save strategy and continue later
 - **Context Continuity** – Carries forward summaries of previous chapters during translation to maintain consistency
 - **EPUB Reader** – Built-in reader with side-by-side original/translation view, AI Q&A, and title editing
+- **Immersive Reading Mode** – Fullscreen distraction-free reading; desktop: Photoshop-style icon sidebar that expands on hover; mobile: floating menu button with bottom toolbar; AI Q&A as a floating chat widget
 - **Bilingual Titles** – Chapter titles displayed in both source and target languages in the editor and generated EPUBs
 - **Chapter Type Management** – Mark chapters as front matter, body chapters, or back matter; body chapters are auto-numbered
 - **Parallel Translation** – Multiple text chunks are translated concurrently within each chapter, dramatically speeding up translation
-- **EPUB Output** – Chapter-by-chapter EPUB output with stop/resume, individual downloads, and combined full-book EPUB
+- **Retranslation with Feedback** – Retranslate individual chapters with specific feedback; optionally override annotation/style options per chapter; strategy automatically updated based on feedback
+- **Version Control** – Full version history for both translations and strategies; compare versions side-by-side, preview strategy versions before applying, and revert to any previous version
+- **Strategy Templates** – Save translation strategies as reusable templates; apply them to new projects for quick setup
+- **EPUB Output** – Chapter-by-chapter EPUB output with stop/resume, individual downloads, and combined full-book EPUB with configurable appendices (annotations, Q&A, highlights)
 - **Project Export/Import** – Export an entire project (analysis, strategy, translations, annotations, Q&A, highlights) as a single JSON file; share it with others who can import and browse in their own instance
 - **Persistent AI Q&A** – All reader Q&A conversations are saved and restored across sessions; downloadable as an EPUB appendix
-- **Highlights & Notes** – Highlight text and add personal notes directly in the reader; exportable as a standalone EPUB
+- **Highlights & Notes** – Highlight text and add personal notes directly in the reader; exportable as standalone EPUB or Markdown
 - **Multi-Model Support** – Google Gemini (native SDK), OpenAI, DeepSeek, Ollama (local), and any OpenAI-compatible API
 - **Bilingual UI** – Interface available in Chinese and English
 
@@ -36,7 +41,8 @@ BiTranslator is an AI-driven whole-book translation tool that works with **EPUB 
 
 ```
 Upload EPUB → Deep Analysis (with online research) → Generate Strategy → Edit Strategy
-→ Translate Sample → Review/Feedback → Full Translation → Reader & Review → Download EPUB
+→ Translate Sample → Review/Feedback → Full Translation → Reader & Review
+→ Immersive Reading → Download EPUB (with optional appendices)
 ```
 
 ### Screenshots
@@ -112,12 +118,13 @@ Open http://127.0.0.1:8000 in your browser.
 #### 4. Usage
 
 1. **Upload** – Select an EPUB file, set the target language (source auto-detected)
-2. **Analysis** – AI analyzes the book with online research (may take a few minutes)
-3. **Strategy** – Review and customize the translation strategy; provide feedback to regenerate if needed
+2. **Analysis** – AI analyzes the book with online research (may take a few minutes); provide feedback to re-analyze
+3. **Strategy** – Review and customize the translation strategy; provide feedback to regenerate; save versions and templates
 4. **Sample** – Select a sample chapter and review translation quality; iterate as needed
 5. **Translate** – Select chapter range and start translating; stop/resume anytime
-6. **Review** – Read chapters in the built-in reader; re-translate individual chapters if needed
-7. **Download** – Download individual chapter EPUBs or combine into a full translated book
+6. **Review** – Read chapters in the built-in reader; re-translate individual chapters with feedback; compare translation versions
+7. **Immersive Mode** – Enter fullscreen distraction-free reading with AI Q&A, annotations, and highlights
+8. **Download** – Download individual chapter EPUBs or combine into a full book with optional appendices
 
 ### Supported LLMs
 
@@ -136,8 +143,8 @@ bitranslator/
 ├── backend/
 │   ├── app.py              # FastAPI application
 │   ├── config.py           # Configuration management
-│   ├── database.py         # SQLite database
-│   ├── models.py           # Data models
+│   ├── database.py         # SQLite database (with auto-migration)
+│   ├── models.py           # Pydantic data models
 │   ├── routers/
 │   │   ├── books.py        # Project/book management API
 │   │   └── translation.py  # Analysis/strategy/translation API
@@ -146,12 +153,25 @@ bitranslator/
 │       ├── epub_service.py         # EPUB parsing & building
 │       ├── analysis_service.py     # Book deep analysis with online research
 │       ├── strategy_service.py     # Translation strategy generation
-│       └── translation_service.py  # Translation engine with auto-continuation
+│       ├── translation_service.py  # Translation engine with auto-continuation
+│       └── name_data.py            # Common name database for name detection
 ├── frontend/
 │   ├── index.html          # UI
-│   ├── style.css           # Styles
-│   ├── app.js              # Entry point & routing
-│   └── modules/            # Frontend modules (upload, analysis, strategy, etc.)
+│   ├── style.css           # Styles (responsive, dark/light themes)
+│   ├── app.js              # Entry point & hash-based routing
+│   └── modules/
+│       ├── state.js        # Shared application state
+│       ├── core.js         # Core utilities & panel switching
+│       ├── i18n.js         # Internationalization (zh/en)
+│       ├── settings.js     # LLM settings sidebar
+│       ├── upload.js       # File upload
+│       ├── analysis.js     # Deep analysis panel
+│       ├── strategy.js     # Strategy editor & version control
+│       ├── sample.js       # Sample translation
+│       ├── translate.js    # Full translation progress
+│       ├── review.js       # Chapter review panel
+│       ├── titles.js       # Chapter title management
+│       └── reader.js       # EPUB reader & immersive mode
 ├── data/                   # Runtime data (uploads, database)
 ├── output/                 # Translated EPUB output
 ├── requirements.txt
@@ -175,17 +195,22 @@ BiTranslator 是一款 AI 驱动的整书翻译工具，支持 **EPUB 格式**�
 - **用户控制** – 可编辑策略、修改术语表、指定角色名翻译、设定语气。每个步骤都可以提供修正意见
 - **翻译风格偏好** – 可选择忠实原文翻译或优先可读性的意译模式，针对长难句自动拆分重组
 - **翻译附注** – AI 翻译时同步生成长难句、惯用语、文化背景的意译分析注释；可在阅读器内高亮查看或弹窗浏览全部附注；支持导出为独立 EPUB
+- **附注密度控制** – 可选择详尽（每段 8–15 条）、适中（3–8 条）或精简（1–3 条）三种附注密度，满足不同阅读习惯
 - **样章审阅** – 翻译样章供预览；根据反馈调整策略后可重新翻译
 - **章节范围选择** – 选择翻译特定章节（如第3-10章）；保存策略后可随时继续
 - **上下文连贯** – 翻译时携带前面章节的摘要，保持情节和术语一致性
 - **EPUB 阅读器** – 内置阅读器，支持原文/译文对照阅读、AI 问答、标题编辑
+- **沉浸式阅读** – 全屏无干扰阅读模式；电脑端：Photoshop 式图标侧边栏，鼠标悬停展开；手机端：浮动菜单按钮搭配底部工具栏；AI 问答变为浮动聊天窗口
 - **双语标题** – 章节标题在编辑器和生成的 EPUB 中以原文/译文双语显示
 - **章节类型管理** – 可将章节标记为前言、正文或附录；正文章节自动编号
 - **并行翻译** – 每章内多个文本块同时发送翻译请求，大幅提升翻译速度
-- **EPUB 输出** – 逐章输出 EPUB，支持停止/恢复、单章下载、合并为完整译本
+- **带反馈的重新翻译** – 可针对单章提交具体反馈重新翻译；可单独覆盖标注/风格选项；策略根据反馈自动更新
+- **版本控制** – 译文和翻译策略均有完整版本历史；可并排对比版本、预览策略版本详情后再应用、回溯到任意历史版本
+- **策略模板** – 可将翻译策略保存为可复用模板；新项目可一键应用模板快速启动
+- **EPUB 输出** – 逐章输出 EPUB，支持停止/恢复、单章下载、合并为完整译本（可配置附录：附注、问答、划线笔记）
 - **项目导出/导入** – 将完整项目（分析、策略、译文、附注、问答、划线笔记）导出为 JSON 文件；可分享给他人在其本地实例中导入浏览
 - **AI 问答保存** – 阅读器内的所有 AI 问答对话自动保存，跨会话恢复；可下载为 EPUB 附录
-- **划线与笔记** – 在阅读器内直接划线和添加个人批注；可导出为独立 EPUB
+- **划线与笔记** – 在阅读器内直接划线和添加个人批注；可导出为独立 EPUB 或 Markdown
 - **多模型支持** – Google Gemini（原生 SDK）、OpenAI、DeepSeek、Ollama（本地模型）及任意 OpenAI 兼容 API
 - **双语界面** – 支持中文和英文界面切换
 
@@ -193,7 +218,8 @@ BiTranslator 是一款 AI 驱动的整书翻译工具，支持 **EPUB 格式**�
 
 ```
 上传 EPUB → 深度分析（含在线调研）→ 生成翻译策略 → 编辑策略
-→ 翻译样章 → 审阅/反馈 → 全书翻译 → 阅读器审阅 → 下载 EPUB
+→ 翻译样章 → 审阅/反馈 → 全书翻译 → 阅读器审阅
+→ 沉浸式阅读 → 下载 EPUB（可选附录）
 ```
 
 ### 界面截图
@@ -269,12 +295,13 @@ python run.py
 #### 4. 使用方法
 
 1. **上传** – 选择 EPUB 文件，设置目标语言（源语言自动检测）
-2. **分析** – AI 分析书籍并进行在线调研（可能需要几分钟）
-3. **策略** – 审阅并自定义翻译策略；可提交反馈重新生成
+2. **分析** – AI 分析书籍并进行在线调研（可能需要几分钟）；可提交反馈重新分析
+3. **策略** – 审阅并自定义翻译策略；可提交反馈重新生成；保存版本和模板
 4. **样章** – 选择样章并审阅翻译质量；可反复调整
 5. **翻译** – 选择章节范围开始翻译；随时可停止/恢复
-6. **审阅** – 在内置阅读器中阅读；可对单章重新翻译
-7. **下载** – 下载单章 EPUB 或合并为完整译本
+6. **审阅** – 在内置阅读器中阅读；可对单章提交反馈重新翻译；对比不同译文版本
+7. **沉浸阅读** – 进入全屏无干扰阅读，配合 AI 问答、附注和划线笔记
+8. **下载** – 下载单章 EPUB 或合并为完整译本（可选附录）
 
 ### 支持的 LLM
 
@@ -293,8 +320,8 @@ bitranslator/
 ├── backend/
 │   ├── app.py              # FastAPI 应用
 │   ├── config.py           # 配置管理
-│   ├── database.py         # SQLite 数据库
-│   ├── models.py           # 数据模型
+│   ├── database.py         # SQLite 数据库（含自动迁移）
+│   ├── models.py           # Pydantic 数据模型
 │   ├── routers/
 │   │   ├── books.py        # 项目/书籍管理 API
 │   │   └── translation.py  # 分析/策略/翻译 API
@@ -303,12 +330,25 @@ bitranslator/
 │       ├── epub_service.py         # EPUB 解析与构建
 │       ├── analysis_service.py     # 书籍深度分析（含在线调研）
 │       ├── strategy_service.py     # 翻译策略生成
-│       └── translation_service.py  # 翻译引擎（含自动续写）
+│       ├── translation_service.py  # 翻译引擎（含自动续写）
+│       └── name_data.py            # 常见姓名数据库（用于人名检测）
 ├── frontend/
 │   ├── index.html          # 用户界面
-│   ├── style.css           # 样式
-│   ├── app.js              # 入口与路由
-│   └── modules/            # 前端模块（上传、分析、策略等）
+│   ├── style.css           # 样式（响应式、明/暗主题）
+│   ├── app.js              # 入口与哈希路由
+│   └── modules/
+│       ├── state.js        # 共享应用状态
+│       ├── core.js         # 核心工具与面板切换
+│       ├── i18n.js         # 国际化（中/英）
+│       ├── settings.js     # LLM 设置侧边栏
+│       ├── upload.js       # 文件上传
+│       ├── analysis.js     # 深度分析面板
+│       ├── strategy.js     # 策略编辑器与版本控制
+│       ├── sample.js       # 样章翻译
+│       ├── translate.js    # 全书翻译进度
+│       ├── review.js       # 章节审阅面板
+│       ├── titles.js       # 章节标题管理
+│       └── reader.js       # EPUB 阅读器与沉浸模式
 ├── data/                   # 运行时数据（上传文件、数据库）
 ├── output/                 # 翻译输出的 EPUB
 ├── requirements.txt
@@ -327,10 +367,17 @@ bitranslator/
 3. **滚动上下文** – 翻译每章时，携带前面章节的摘要作为上下文
 4. **长章节拆分** – 过长章节自动在段落边界拆分翻译，并支持截断检测和自动续写
 
+#### 版本控制
+
+- 翻译策略和章节译文均支持完整版本历史
+- 策略版本可预览详情后再决定是否应用，也可保存为跨项目的模板
+- 用户提交重新翻译反馈时，策略自动更新并生成新版本
+- 每次重新翻译都会保存当前译文为历史版本，便于回溯
+
 #### 数据存储
 
 所有数据存储在本地：
-- SQLite 数据库存储项目信息、章节内容、分析结果和翻译策略
+- SQLite 数据库存储项目信息、章节内容、分析结果、翻译策略、版本历史、人名表、问答记录和划线笔记
 - 上传的 EPUB 和翻译后的 EPUB 存储在各项目子目录中
 
 ---
@@ -392,6 +439,20 @@ The final right of interpretation of this statement belongs to the author of the
 <a id="changelog"></a>
 ## 更新日志 / Changelog
 
+#### 2026-02-26
+
+| 类型 | 内容 |
+|------|------|
+| feat | **Retranslation with feedback**: retranslate chapters with specific feedback; override annotation/style options per chapter; strategy auto-updates / **带反馈的重新翻译**：单章重新翻译时可提交具体反馈，可单独覆盖标注和风格选项，策略自动更新 |
+| feat | **Translation version control**: full version history for chapter translations; compare versions side-by-side; restore any previous version / **译文版本控制**：章节译文完整版本历史，可并排对比，可恢复任意历史版本 |
+| feat | **Strategy version control**: full version history for translation strategies with preview before applying; linked to translation versions / **策略版本控制**：翻译策略完整版本历史，可预览详情后再应用，与译文版本关联 |
+| feat | **Strategy templates**: save strategies as reusable templates; apply to new projects / **策略模板**：将翻译策略保存为可复用模板，新项目可一键应用 |
+| feat | **Annotation density control**: choose verbose (8–15 notes), normal (3–8), or minimal (1–3) annotation density / **附注密度控制**：可选详尽、适中、精简三档附注密度 |
+| feat | **Immersive reading mode**: fullscreen distraction-free reader; desktop: Photoshop-style icon sidebar expanding on hover; mobile: floating menu with bottom toolbar; AI Q&A as floating chat widget / **沉浸式阅读**：全屏无干扰阅读，电脑端图标侧边栏悬停展开，手机端浮动菜单底部工具栏，AI 问答浮动窗口 |
+| feat | **Combined EPUB options panel**: configure appendices (annotations placement, highlights, Q&A) when downloading full book / **合并下载选项面板**：下载全书时可配置附录内容（附注位置、划线笔记、问答） |
+| feat | **Highlights export formats**: export highlights as EPUB or Markdown / **划线笔记导出格式**：支持导出为 EPUB 或 Markdown |
+
+
 #### 2026-02-25
 
 | 类型 | 内容 |
@@ -412,7 +473,7 @@ The final right of interpretation of this statement belongs to the author of the
 | feat | **Free-translation preference**: new strategy option to prioritize readability — restructure long/complex sentences for clarity / **意译偏好选项**：新增翻译策略选项，优先可读性，长难句自动拆分重组 |
 | fix | Fix annotation tooltip text color invisible in dark theme / 修复暗色主题下附注提示框文字不可见的问题 |
 
-#### 2025-02-22
+#### 2026-02-22
 
 | 类型 | 内容 |
 |------|------|
