@@ -3,6 +3,7 @@ import { state } from './state.js';
 import { $, show, hide, showPanel, apiJson, startPolling, esc } from './core.js';
 import { t } from './i18n.js';
 import { getSelectedTemplateId } from './analysis.js';
+import { openTemplateModal } from './templateModal.js';
 
 function _addNameRow(tbody, original = "", translated = "", note = "") {
   const tr = document.createElement("tr");
@@ -92,8 +93,6 @@ export async function showStrategy() {
 
     // Load strategy version history
     _loadStrategyVersions();
-    // Load templates
-    _loadTemplates();
   } catch (e) {
     console.error("showStrategy failed", e);
   }
@@ -189,8 +188,26 @@ export function initStrategy() {
       alert(t("template_saved"));
       $("#template-name-input").value = "";
       $("#template-desc-input").value = "";
-      _loadTemplates();
     } catch (e) { alert("保存失败: " + e.message); }
+  });
+
+  // Apply from template (opens shared modal, then regenerates)
+  $("#btn-pick-template-strategy")?.addEventListener("click", () => {
+    openTemplateModal(async (id, name) => {
+      if (!id) return;
+      try {
+        show($("#strategy-loading")); hide($("#strategy-content"));
+        await apiJson(`/api/projects/${state.currentProjectId}/strategy/from-template`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ template_id: id }),
+        });
+        alert(t("template_applied"));
+        startPolling();
+      } catch (e) {
+        alert("Apply failed: " + e.message);
+        hide($("#strategy-loading")); show($("#strategy-content"));
+      }
+    });
   });
 }
 
@@ -323,58 +340,3 @@ async function _showStrategyVersionPreview(version, isCurrent) {
   }
 }
 
-async function _loadTemplates() {
-  const list = $("#template-list");
-  if (!list) return;
-  try {
-    const templates = await apiJson(`/api/strategy-templates`);
-    if (!templates.length) { list.innerHTML = ""; return; }
-    list.innerHTML = "";
-    for (const tpl of templates) {
-      const row = document.createElement("div");
-      row.className = "template-row";
-      const date = tpl.created_at ? new Date(tpl.created_at).toLocaleString() : "";
-      row.innerHTML = `
-        <div class="tpl-info">
-          <span class="tpl-name">${esc(tpl.name)}</span>
-          <span class="tpl-meta">${esc(tpl.description || "")}${tpl.genre ? " · " + esc(tpl.genre) : ""} · ${date}</span>
-        </div>
-        <div class="tpl-actions">
-          <button class="btn btn-sm btn-primary tpl-apply" data-id="${tpl.id}">${t("apply_template")}</button>
-          <button class="btn btn-sm btn-danger tpl-delete" data-id="${tpl.id}" data-name="${esc(tpl.name)}">${t("delete_template")}</button>
-        </div>`;
-      list.appendChild(row);
-    }
-
-    list.querySelectorAll(".tpl-apply").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const tid = btn.dataset.id;
-        try {
-          show($("#strategy-loading")); hide($("#strategy-content"));
-          await apiJson(`/api/projects/${state.currentProjectId}/strategy/from-template`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ template_id: tid }),
-          });
-          alert(t("template_applied"));
-          startPolling();
-        } catch (e) {
-          alert("Apply failed: " + e.message);
-          hide($("#strategy-loading")); show($("#strategy-content"));
-        }
-      });
-    });
-
-    list.querySelectorAll(".tpl-delete").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const name = btn.dataset.name;
-        if (!confirm(t("confirm_delete_template").replace("{name}", name))) return;
-        try {
-          await apiJson(`/api/strategy-templates/${btn.dataset.id}`, { method: "DELETE" });
-          _loadTemplates();
-        } catch (e) { alert("Delete failed: " + e.message); }
-      });
-    });
-  } catch (e) {
-    list.innerHTML = "";
-  }
-}

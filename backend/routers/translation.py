@@ -308,6 +308,22 @@ async def save_as_template(project_id: str, req: StrategyTemplateCreate):
     return {"ok": True, "id": template_id}
 
 
+@router.get("/strategy-templates/{template_id}")
+async def get_strategy_template_detail(template_id: str):
+    t = db.get_strategy_template(template_id)
+    if not t:
+        raise HTTPException(404, "Template not found")
+    return {
+        "id": t["id"], "name": t["name"],
+        "description": t.get("description") or "",
+        "source_language": t.get("source_language") or "",
+        "target_language": t.get("target_language") or "",
+        "genre": t.get("genre") or "",
+        "created_at": t.get("created_at") or "",
+        "data": t.get("data") or {},
+    }
+
+
 @router.delete("/strategy-templates/{template_id}")
 async def delete_strategy_template(template_id: str):
     db.delete_strategy_template(template_id)

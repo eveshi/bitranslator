@@ -2,8 +2,10 @@
 import { state } from './state.js';
 import { $, show, hide, showPanel, apiJson, startPolling, esc } from './core.js';
 import { t } from './i18n.js';
+import { openTemplateModal } from './templateModal.js';
 
 let _selectedTemplateId = null;
+let _selectedTemplateName = null;
 
 export async function startAnalysis() {
   showPanel("analysis");
@@ -70,7 +72,7 @@ export async function showAnalysis() {
 
     _set("#analysis-feedback", "value", "");
     await loadChapterOverview();
-    await _loadTemplatePicker();
+    await _checkTemplates();
   } catch (e) {
     console.error("showAnalysis failed", e);
   }
@@ -78,45 +80,17 @@ export async function showAnalysis() {
 
 export function getSelectedTemplateId() { return _selectedTemplateId; }
 
-async function _loadTemplatePicker() {
+async function _checkTemplates() {
   const section = $("#template-picker-section");
-  const list = $("#template-picker-list");
-  if (!section || !list) return;
+  if (!section) return;
   _selectedTemplateId = null;
+  _selectedTemplateName = null;
+  const label = $("#picked-template-label");
+  if (label) label.textContent = "";
   try {
     const templates = await apiJson(`/api/strategy-templates`);
-    if (!templates.length) { hide(section); list.innerHTML = ""; return; }
+    if (!templates.length) { hide(section); return; }
     show(section);
-    list.innerHTML = "";
-    // "No template" option
-    const noneRow = document.createElement("div");
-    noneRow.className = "tpl-pick-row selected";
-    noneRow.dataset.id = "";
-    noneRow.innerHTML = `<span class="tpl-pick-radio">●</span><span class="tpl-pick-label">${t("no_template")}</span>`;
-    list.appendChild(noneRow);
-
-    for (const tpl of templates) {
-      const row = document.createElement("div");
-      row.className = "tpl-pick-row";
-      row.dataset.id = tpl.id;
-      const meta = [tpl.genre, tpl.description].filter(Boolean).join(" · ");
-      row.innerHTML = `<span class="tpl-pick-radio">○</span>
-        <span class="tpl-pick-label">${esc(tpl.name)}</span>
-        ${meta ? `<span class="tpl-pick-meta">${esc(meta)}</span>` : ""}`;
-      list.appendChild(row);
-    }
-
-    list.querySelectorAll(".tpl-pick-row").forEach(row => {
-      row.addEventListener("click", () => {
-        list.querySelectorAll(".tpl-pick-row").forEach(r => {
-          r.classList.remove("selected");
-          r.querySelector(".tpl-pick-radio").textContent = "○";
-        });
-        row.classList.add("selected");
-        row.querySelector(".tpl-pick-radio").textContent = "●";
-        _selectedTemplateId = row.dataset.id || null;
-      });
-    });
   } catch (e) {
     hide(section);
   }
@@ -191,6 +165,16 @@ export function updateRangeHint(startId, endId, hintId, total) {
 }
 
 export function initAnalysis() {
+  // Pick template button on analysis page
+  $("#btn-pick-template-analysis")?.addEventListener("click", () => {
+    openTemplateModal((id, name) => {
+      _selectedTemplateId = id;
+      _selectedTemplateName = name;
+      const label = $("#picked-template-label");
+      if (label) label.textContent = id ? `✓ ${name}` : "";
+    });
+  });
+
   // Refine analysis
   $("#btn-refine-analysis").addEventListener("click", async () => {
     const feedback = $("#analysis-feedback").value.trim();

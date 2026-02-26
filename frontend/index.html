@@ -198,10 +198,9 @@
             <button class="btn" id="btn-refine-analysis">🔄 根据反馈重新分析</button>
           </div>
 
-          <div id="template-picker-section" class="template-picker-section hidden">
-            <h3>📋 <span data-i18n="use_template_hint">可选：基于已有模板生成策略</span></h3>
-            <p class="hint" data-i18n="template_picker_desc">如果您之前保存过翻译策略模板，可以选择一个作为参考。AI 将结合当前书籍的分析结果和模板生成新策略。</p>
-            <div class="template-picker-list" id="template-picker-list"></div>
+          <div id="template-picker-section" class="template-picker-row hidden">
+            <button class="btn btn-outline btn-sm" id="btn-pick-template-analysis">📋 <span data-i18n="use_template_hint">选择策略模板</span></button>
+            <span id="picked-template-label" class="picked-tpl-label hint"></span>
           </div>
           <button class="btn btn-primary" id="btn-gen-strategy">生成翻译策略 →</button>
         </div>
@@ -328,7 +327,7 @@
               <input type="text" id="template-desc-input" placeholder="备注说明（可选）" class="template-input" />
               <button class="btn btn-sm" id="btn-save-template" data-i18n="save_as_template">💾 保存为模板</button>
             </div>
-            <div id="template-list" class="template-list"></div>
+            <button class="btn btn-sm btn-outline" id="btn-pick-template-strategy" data-i18n="apply_from_template" style="margin-top:.5rem">📋 从模板重新生成策略</button>
           </div>
           <div class="sample-chapter-picker">
             <label>选择样章：第
@@ -763,6 +762,27 @@
           </div>
         </div>
       </div>
+      <!-- Template selection modal (shared by analysis + strategy pages) -->
+      <div id="template-modal-overlay" class="modal-overlay hidden">
+        <div class="modal-content template-modal">
+          <div class="modal-header">
+            <h3 data-i18n="select_template_title">📋 选择策略模板</h3>
+            <button class="btn-icon" id="btn-close-template-modal">✕</button>
+          </div>
+          <p class="hint" data-i18n="template_picker_desc">选择一个已保存的模板作为参考。AI 将结合当前书籍的分析结果和模板生成新策略。</p>
+          <div class="tpl-modal-select-row">
+            <label data-i18n="select_template_label">模板：</label>
+            <select id="tpl-modal-select"><option value="">--</option></select>
+            <button class="btn btn-sm btn-danger" id="btn-tpl-modal-delete" style="margin-left:.5rem" title="删除" data-i18n="delete_template">删除</button>
+          </div>
+          <div id="tpl-modal-detail" class="tpl-modal-detail"></div>
+          <div class="btn-row" style="margin-top:1rem">
+            <button class="btn btn-primary" id="btn-tpl-modal-confirm" disabled data-i18n="confirm_use_template">确认选择</button>
+            <button class="btn btn-outline" id="btn-tpl-modal-none" data-i18n="no_template">不使用模板</button>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 

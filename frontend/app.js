@@ -11,6 +11,7 @@ import { updateProgressUI, initTranslate } from './modules/translate.js';
 import { showReview, showDone, initReview, setOpenChapterReader } from './modules/review.js';
 import { openChapterReader, loadReaderChapter, initReader } from './modules/reader.js';
 import { initTitles } from './modules/titles.js';
+import { initTemplateModal } from './modules/templateModal.js';
 
 // ── Wire cross-module callbacks ─────────────────────────────────────
 setOpenProject(openProject);
@@ -214,6 +215,7 @@ initTranslate();
 initReview();
 initReader();
 initTitles();
+initTemplateModal();
 
 // ── Scroll shadow for sticky steps bar ──────────────────────────────
 const mainEl = $("#main");
