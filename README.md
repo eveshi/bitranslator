@@ -451,7 +451,12 @@ The final right of interpretation of this statement belongs to the author of the
 | feat | **Immersive reading mode**: fullscreen distraction-free reader; desktop: Photoshop-style icon sidebar expanding on hover; mobile: floating menu with bottom toolbar; AI Q&A as floating chat widget / **沉浸式阅读**：全屏无干扰阅读，电脑端图标侧边栏悬停展开，手机端浮动菜单底部工具栏，AI 问答浮动窗口 |
 | feat | **Combined EPUB options panel**: configure appendices (annotations placement, highlights, Q&A) when downloading full book / **合并下载选项面板**：下载全书时可配置附录内容（附注位置、划线笔记、问答） |
 | feat | **Highlights export formats**: export highlights as EPUB or Markdown / **划线笔记导出格式**：支持导出为 EPUB 或 Markdown |
-
+| fix | Fix retranslation race condition: poll now waits for status change before accepting completion / 修复重新翻译竞态条件：轮询现在等待状态变化后才确认完成 |
+| fix | Fix review panel hover style invisible in dark theme / 修复审阅面板暗色主题下悬停样式不可见 |
+| fix | Fix strategy version duplicates and incorrect "current" labels / 修复策略版本重复和"当前"标签错误 |
+| fix | Fix custom instructions field polluted with system text / 修复自定义指令文本框被系统文字污染 |
+| fix | Fix translated chapter title lost after retranslation / 修复重新翻译后译文标题丢失 |
+| fix | Fix "Translate titles" button translating all titles instead of current chapter only / 修复"翻译标题"按钮翻译所有标题而非仅当前章节 |
 
 #### 2026-02-25
 

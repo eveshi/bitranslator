@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BiTranslator – 智能全书翻译</title>
-  <link rel="stylesheet" href="style.css?v=30" />
+  <link rel="stylesheet" href="style.css?v=31" />
 </head>
 <body>
   <div id="app">
@@ -198,6 +198,11 @@
             <button class="btn" id="btn-refine-analysis">🔄 根据反馈重新分析</button>
           </div>
 
+          <div id="template-picker-section" class="template-picker-section hidden">
+            <h3>📋 <span data-i18n="use_template_hint">可选：基于已有模板生成策略</span></h3>
+            <p class="hint" data-i18n="template_picker_desc">如果您之前保存过翻译策略模板，可以选择一个作为参考。AI 将结合当前书籍的分析结果和模板生成新策略。</p>
+            <div class="template-picker-list" id="template-picker-list"></div>
+          </div>
           <button class="btn btn-primary" id="btn-gen-strategy">生成翻译策略 →</button>
         </div>
       </section>
@@ -761,6 +766,6 @@
     </main>
   </div>
 
-  <script type="module" src="app.js?v=30"></script>
+  <script type="module" src="app.js?v=31"></script>
 </body>
 </html>

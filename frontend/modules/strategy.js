@@ -2,6 +2,7 @@
 import { state } from './state.js';
 import { $, show, hide, showPanel, apiJson, startPolling, esc } from './core.js';
 import { t } from './i18n.js';
+import { getSelectedTemplateId } from './analysis.js';
 
 function _addNameRow(tbody, original = "", translated = "", note = "") {
   const tr = document.createElement("tr");
@@ -119,11 +120,19 @@ export function initStrategy() {
   // Toggle density visibility based on annotations checkbox
   $("#strat-enable-annotations").addEventListener("change", _toggleDensityVisibility);
 
-  // Generate strategy
+  // Generate strategy (optionally from template selected on analysis page)
   $("#btn-gen-strategy").addEventListener("click", async () => {
     showPanel("strategy"); show($("#strategy-loading")); hide($("#strategy-content"));
+    const templateId = getSelectedTemplateId();
     try {
-      await apiJson(`/api/projects/${state.currentProjectId}/strategy/generate`, { method: "POST" });
+      if (templateId) {
+        await apiJson(`/api/projects/${state.currentProjectId}/strategy/from-template`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ template_id: templateId }),
+        });
+      } else {
+        await apiJson(`/api/projects/${state.currentProjectId}/strategy/generate`, { method: "POST" });
+      }
       startPolling();
     } catch (e) { alert("生成策略失败: " + e.message); }
   });

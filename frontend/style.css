@@ -1881,6 +1881,29 @@ mark.user-highlight.has-note {
 .tpl-meta { display: block; font-size: .75rem; color: var(--text-dim); }
 .tpl-actions { display: flex; gap: .3rem; flex-shrink: 0; margin-left: .5rem; }
 
+/* ── Template picker on analysis page ────────────────────────────── */
+.template-picker-section {
+  margin-top: 1.5rem; padding: 1rem; border-radius: 10px;
+  background: var(--bg-input); border: 1px solid var(--border);
+}
+.template-picker-section h3 { margin: 0 0 .3rem; font-size: 1rem; }
+.template-picker-list { display: flex; flex-direction: column; gap: .35rem; margin-top: .5rem; }
+.tpl-pick-row {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .5rem .75rem; border-radius: 8px; cursor: pointer;
+  border: 2px solid transparent; transition: border-color .15s, background .15s;
+}
+.tpl-pick-row:hover { background: rgba(var(--primary-rgb, 99,102,241), .06); }
+.tpl-pick-row.selected {
+  border-color: var(--primary); background: rgba(var(--primary-rgb, 99,102,241), .08);
+}
+.tpl-pick-radio {
+  width: 1.2em; text-align: center; font-size: 1rem; color: var(--primary);
+  flex-shrink: 0;
+}
+.tpl-pick-label { font-weight: 600; font-size: .9rem; }
+.tpl-pick-meta { font-size: .75rem; color: var(--text-dim); margin-left: auto; }
+
 /* ── Retranslate options ─────────────────────────────────────────── */
 .retranslate-options { display: flex; flex-direction: column; gap: .3rem; margin: .5rem 0; }
 .retranslate-options .checkbox-row { margin: 0; }
